@@ -63,6 +63,8 @@ static wifi_info_t current_wifi_info = {
 
 static esp_err_t wifi_init_common(void);
 static esp_err_t wifi_connect_local(const char *ssid, const char *password);
+static bool wifi_load_saved_config(wifi_config_t *wifi_config);
+static void wifi_apply_saved_ui_state(const wifi_config_t *wifi_config);
 static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data);
 static void wifi_refresh_status_ui(void);
 static void wifi_set_connection_state(wifi_connection_state_t state);
@@ -367,7 +369,7 @@ static esp_err_t wifi_init_common(void)
         return ret;
     }
 
-    ret = esp_wifi_set_storage(WIFI_STORAGE_RAM);
+    ret = esp_wifi_set_storage(WIFI_STORAGE_FLASH);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to set WiFi storage: %s", esp_err_to_name(ret));
         return ret;
@@ -386,6 +388,68 @@ static esp_err_t wifi_init_common(void)
 
     wifi_initialized = true;
     ESP_LOGI(TAG, "WiFi initialized successfully");
+    return ESP_OK;
+}
+
+static bool wifi_load_saved_config(wifi_config_t *wifi_config)
+{
+    if (!wifi_config) {
+        return false;
+    }
+
+    memset(wifi_config, 0, sizeof(*wifi_config));
+    esp_err_t ret = esp_wifi_get_config(WIFI_IF_STA, wifi_config);
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to read saved WiFi config: %s", esp_err_to_name(ret));
+        return false;
+    }
+
+    if (wifi_config->sta.ssid[0] == '\0') {
+        return false;
+    }
+
+    return true;
+}
+
+static void wifi_apply_saved_ui_state(const wifi_config_t *wifi_config)
+{
+    if (!wifi_config) {
+        return;
+    }
+
+    strncpy(current_wifi_info.ssid, (const char *)wifi_config->sta.ssid, sizeof(current_wifi_info.ssid) - 1);
+    current_wifi_info.ssid[sizeof(current_wifi_info.ssid) - 1] = '\0';
+    strncpy(current_wifi_info.password, (const char *)wifi_config->sta.password, sizeof(current_wifi_info.password) - 1);
+    current_wifi_info.password[sizeof(current_wifi_info.password) - 1] = '\0';
+}
+
+esp_err_t wifi_start_saved_connection(void)
+{
+    esp_err_t ret = wifi_init_common();
+    if (ret != ESP_OK) {
+        return ret;
+    }
+
+    wifi_config_t wifi_config = {0};
+    if (!wifi_load_saved_config(&wifi_config)) {
+        ESP_LOGI(TAG, "No saved WiFi credentials found");
+        return ESP_OK;
+    }
+
+    wifi_apply_saved_ui_state(&wifi_config);
+    current_wifi_info.ip_address[0] = '\0';
+    wifi_connect_pending = true;
+    wifi_set_connection_state(WIFI_CONNECTION_STATE_CONNECTING);
+
+    ESP_LOGI(TAG, "Attempting auto-connect to saved SSID: %s", current_wifi_info.ssid);
+    ret = esp_wifi_connect();
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to auto-connect to saved WiFi: %s", esp_err_to_name(ret));
+        wifi_connect_pending = false;
+        wifi_set_connection_state(WIFI_CONNECTION_STATE_DISCONNECTED);
+        return ret;
+    }
+
     return ESP_OK;
 }
 
