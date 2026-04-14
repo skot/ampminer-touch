@@ -4,14 +4,11 @@
 #include "night.h"
 #include "block.h"
 #include "clock.h"
-#include "price.h"
-#include "mempool.h"
 #include "stdio.h"
 #include "string.h"
 #include "custom_fonts.h"
 #include "esp_timer.h"
 #include "esp_random.h"
-#include "lvgl__lvgl/src/extra/libs/qrcode/lv_qrcode.h"
 #include "assets/temperature_icon.h"
 #include "assets/fan.h"
 #include "assets/star.h"
@@ -196,7 +193,7 @@ static void create_pool_popup(void)
     lv_obj_add_flag(popup_cont, LV_OBJ_FLAG_CLICKABLE);
 
     lv_obj_t *title = lv_label_create(popup_cont);
-    lv_label_set_text(title, "Pool Information & Web Access");
+    lv_label_set_text(title, "Pool Information");
     lv_obj_set_style_text_color(title, COLOR_TEXT_PRIMARY, 0);
     lv_obj_set_style_text_font(title, &lv_font_montserrat_22, 0);
     lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 0);
@@ -244,76 +241,51 @@ static void create_pool_popup(void)
         y_offset += 35;
     }
 
-    lv_obj_t *qr_cont = lv_obj_create(popup_cont);
-    lv_obj_set_size(qr_cont, 280, 250);
-    lv_obj_align(qr_cont, LV_ALIGN_RIGHT_MID, -18, 22);
-    lv_obj_set_style_bg_opa(qr_cont, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(qr_cont, 0, 0);
-    lv_obj_set_style_pad_all(qr_cont, 0, 0);
-    lv_obj_clear_flag(qr_cont, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_t *bridge_cont = lv_obj_create(popup_cont);
+    lv_obj_set_size(bridge_cont, 280, 250);
+    lv_obj_align(bridge_cont, LV_ALIGN_RIGHT_MID, -18, 22);
+    lv_obj_set_style_bg_opa(bridge_cont, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(bridge_cont, 0, 0);
+    lv_obj_set_style_pad_all(bridge_cont, 0, 0);
+    lv_obj_clear_flag(bridge_cont, LV_OBJ_FLAG_SCROLLABLE);
 
-    lv_obj_t *qr_title = lv_label_create(qr_cont);
-    lv_label_set_text(qr_title, "Scan to open AxeOS");
-    lv_obj_set_style_text_color(qr_title, COLOR_TEXT_PRIMARY, 0);
-    lv_obj_set_style_text_font(qr_title, &lv_font_montserrat_16, 0);
-    lv_obj_align(qr_title, LV_ALIGN_TOP_MID, 0, 0);
+    lv_obj_t *bridge_title = lv_label_create(bridge_cont);
+    lv_label_set_text(bridge_title, "USB Bridge");
+    lv_obj_set_style_text_color(bridge_title, COLOR_TEXT_PRIMARY, 0);
+    lv_obj_set_style_text_font(bridge_title, &lv_font_montserrat_16, 0);
+    lv_obj_align(bridge_title, LV_ALIGN_TOP_MID, 0, 0);
 
-    lv_obj_t *qr_hint = lv_label_create(qr_cont);
-    lv_label_set_text(qr_hint, "Edit pool information and BTC address.");
-    lv_label_set_long_mode(qr_hint, LV_LABEL_LONG_WRAP);
-    lv_obj_set_width(qr_hint, 250);
-    lv_obj_set_style_text_align(qr_hint, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_style_text_color(qr_hint, COLOR_TEXT_SECONDARY, 0);
-    lv_obj_set_style_text_font(qr_hint, &lv_font_montserrat_12, 0);
-    lv_obj_align(qr_hint, LV_ALIGN_TOP_MID, 0, 28);
+    lv_obj_t *bridge_box = lv_obj_create(bridge_cont);
+    lv_obj_set_size(bridge_box, 220, 150);
+    lv_obj_align(bridge_box, LV_ALIGN_TOP_MID, 0, 56);
+    lv_obj_set_style_bg_color(bridge_box, COLOR_BORDER, 0);
+    lv_obj_set_style_bg_opa(bridge_box, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(bridge_box, 2, 0);
+    lv_obj_set_style_border_color(bridge_box, COLOR_ACCENT, 0);
+    lv_obj_set_style_radius(bridge_box, 12, 0);
+    lv_obj_clear_flag(bridge_box, LV_OBJ_FLAG_SCROLLABLE);
 
-    const char *ip = wifi_get_current_ip();
-    bool ip_available = ip && ip[0] != '\0' && strcmp(ip, "0.0.0.0") != 0;
+    lv_obj_t *bridge_label = lv_label_create(bridge_box);
+    lv_label_set_text(bridge_label,
+                      "GT Touch forwards\n"
+                      "USB ECM traffic to\n"
+                      "Wi-Fi and keeps BAP\n"
+                      "on USB CDC.");
+    lv_obj_set_style_text_color(bridge_label, COLOR_TEXT_PRIMARY, 0);
+    lv_obj_set_style_text_font(bridge_label, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_align(bridge_label, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_center(bridge_label);
 
-    if (ip_available) {
-        char qr_url[96];
-        snprintf(qr_url, sizeof(qr_url), "http://%s/#/pool", ip);
-
-        lv_obj_t *qr = lv_qrcode_create(qr_cont, 150, COLOR_BACKGROUND, COLOR_TEXT_PRIMARY);
-        lv_qrcode_update(qr, qr_url, strlen(qr_url));
-        lv_obj_align(qr, LV_ALIGN_TOP_MID, 0, 64);
-        lv_obj_set_style_border_color(qr, COLOR_TEXT_PRIMARY, 0);
-        lv_obj_set_style_border_width(qr, 6, 0);
-
-        lv_obj_t *url_label = lv_label_create(qr_cont);
-        lv_label_set_text(url_label, ip);
-        lv_label_set_long_mode(url_label, LV_LABEL_LONG_WRAP);
-        lv_obj_set_width(url_label, 250);
-        lv_obj_set_style_text_align(url_label, LV_TEXT_ALIGN_CENTER, 0);
-        lv_obj_set_style_text_color(url_label, lv_color_hex(0x39FF14), 0);
-        lv_obj_set_style_text_font(url_label, &lv_font_montserrat_20, 0);
-        lv_obj_align(url_label, LV_ALIGN_BOTTOM_MID, 0, 0);
-    } else {
-        lv_obj_t *qr_empty = lv_obj_create(qr_cont);
-        lv_obj_set_size(qr_empty, 150, 150);
-        lv_obj_align(qr_empty, LV_ALIGN_TOP_MID, 0, 64);
-        lv_obj_set_style_bg_color(qr_empty, COLOR_BORDER, 0);
-        lv_obj_set_style_bg_opa(qr_empty, LV_OPA_COVER, 0);
-        lv_obj_set_style_border_width(qr_empty, 2, 0);
-        lv_obj_set_style_border_color(qr_empty, COLOR_ACCENT, 0);
-        lv_obj_set_style_radius(qr_empty, 12, 0);
-        lv_obj_clear_flag(qr_empty, LV_OBJ_FLAG_SCROLLABLE);
-
-        lv_obj_t *empty_label = lv_label_create(qr_empty);
-        lv_label_set_text(empty_label, "No IP Yet");
-        lv_obj_set_style_text_color(empty_label, COLOR_TEXT_PRIMARY, 0);
-        lv_obj_set_style_text_font(empty_label, &lv_font_montserrat_16, 0);
-        lv_obj_center(empty_label);
-
-        lv_obj_t *url_label = lv_label_create(qr_cont);
-        lv_label_set_text(url_label, "Connect Wi-Fi first to generate the setup QR");
-        lv_label_set_long_mode(url_label, LV_LABEL_LONG_WRAP);
-        lv_obj_set_width(url_label, 250);
-        lv_obj_set_style_text_align(url_label, LV_TEXT_ALIGN_CENTER, 0);
-        lv_obj_set_style_text_color(url_label, COLOR_TEXT_SECONDARY, 0);
-        lv_obj_set_style_text_font(url_label, &lv_font_montserrat_12, 0);
-        lv_obj_align(url_label, LV_ALIGN_BOTTOM_MID, 0, -8);
-    }
+    lv_obj_t *bridge_hint = lv_label_create(bridge_cont);
+    lv_label_set_text(bridge_hint,
+                      "Reach the host directly over the LAN.\n"
+                      "The GT Touch does not expose its own web UI.");
+    lv_label_set_long_mode(bridge_hint, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(bridge_hint, 250);
+    lv_obj_set_style_text_align(bridge_hint, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_color(bridge_hint, COLOR_TEXT_SECONDARY, 0);
+    lv_obj_set_style_text_font(bridge_hint, &lv_font_montserrat_12, 0);
+    lv_obj_align(bridge_hint, LV_ALIGN_BOTTOM_MID, 0, -8);
 }
 
 static void pool_popup_close_clicked(lv_event_t *e)
@@ -611,9 +583,7 @@ void home_screen_create(void)
 
     create_bottom_nav_btn(bottom_nav, LV_SYMBOL_HOME, NULL, true);
     create_bottom_nav_btn_img(bottom_nav, &cube_solid_full, home_block_clicked, false);
-    create_bottom_nav_btn_img(bottom_nav, &cubes_solid_full, home_mempool_clicked, false);
     create_bottom_nav_btn_img(bottom_nav, &clock_solid_full, home_clock_clicked, false);
-    create_bottom_nav_btn(bottom_nav, "$", home_price_clicked, false);
     create_bottom_nav_btn(bottom_nav, LV_SYMBOL_WIFI, home_wifi_clicked, false);
     create_bottom_nav_btn(bottom_nav, LV_SYMBOL_SETTINGS, home_settings_clicked, false);
     create_bottom_nav_btn(bottom_nav, LV_SYMBOL_EYE_OPEN, home_night_clicked, false);
@@ -702,24 +672,10 @@ void home_clock_clicked(lv_event_t *e)
     home_screen_destroy();
 }
 
-void home_price_clicked(lv_event_t *e)
-{
-    price_screen_create();
-    lv_scr_load(price_get_screen());
-    home_screen_destroy();
-}
-
 void home_block_clicked(lv_event_t *e)
 {
     block_screen_create();
     lv_scr_load(block_get_screen());
-    home_screen_destroy();
-}
-
-void home_mempool_clicked(lv_event_t *e)
-{
-    mempool_screen_create();
-    lv_scr_load(mempool_get_screen());
     home_screen_destroy();
 }
 

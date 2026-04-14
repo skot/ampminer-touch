@@ -11,7 +11,7 @@
 
 #include "bap_client.h"
 #include "bap_protocol.h"
-#include "bap_uart.h"
+#include "bap_transport.h"
 #include "bap_parser.h"
 
 #ifdef __cplusplus
@@ -28,8 +28,6 @@ extern "C" {
 #define BAP_send_fan_speed(speed) bap_client_send_fan_speed(speed)
 #define BAP_send_automatic_fan_control(enabled) bap_client_send_automatic_fan_control(enabled)
 #define BAP_send_asic_voltage(vol) bap_client_send_asic_voltage(vol)
-#define BAP_send_ssid(ssid) bap_client_send_ssid(ssid)
-#define BAP_send_password(password) bap_client_send_password(password)
 #define BAP_reset_connection_state() bap_client_reset_connection_state()
 #define BAP_is_connected() bap_client_is_connected()
 

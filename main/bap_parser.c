@@ -90,14 +90,8 @@ esp_err_t bap_handle_response(const bap_message_t *msg) {
         ret = bap_handle_best_difficulty_response(msg->value);
     } else if (strcmp(msg->parameter, "voltage") == 0) {
         ESP_LOGI(TAG, "Received voltage: %s", msg->value);
-    } else if (strcmp(msg->parameter, "wifi_ssid") == 0) {
-        ret = bap_handle_wifi_ssid_response(msg->value);
     } else if (strcmp(msg->parameter, "wifi_rssi") == 0) {
         ret = bap_handle_wifi_rssi_response(msg->value);
-    } else if (strcmp(msg->parameter, "wifi_ip") == 0) {
-        ret = bap_handle_wifi_ip_response(msg->value);
-    } else if (strcmp(msg->parameter, "wifi_password") == 0) {
-        ret = bap_handle_wifi_password_response(msg->value);
     } else if (strcmp(msg->parameter, "block_height") == 0) {
         ret = bap_handle_block_height_response(msg->value);
     } else if (strcmp(msg->parameter, "mode") == 0) {
@@ -314,23 +308,6 @@ esp_err_t bap_handle_pool_user_response(const char *value) {
     }
 }
 
-esp_err_t bap_handle_wifi_ssid_response(const char *value) {
-    if (!value) {
-        return ESP_ERR_INVALID_ARG;
-    }
-    
-    ESP_LOGI(TAG, "Received WiFi SSID: %s", value);
-    
-    if (lvgl_port_lock(100)) {
-        wifi_update_ssid(value);
-        lvgl_port_unlock();
-        return ESP_OK;
-    } else {
-        ESP_LOGW(TAG, "Failed to acquire LVGL mutex for WiFi SSID update");
-        return ESP_ERR_TIMEOUT;
-    }
-}
-
 esp_err_t bap_handle_wifi_rssi_response(const char *value) {
     if (!value) {
         return ESP_ERR_INVALID_ARG;
@@ -344,40 +321,6 @@ esp_err_t bap_handle_wifi_rssi_response(const char *value) {
         return ESP_OK;
     } else {
         ESP_LOGW(TAG, "Failed to acquire LVGL mutex for WiFi RSSI update");
-        return ESP_ERR_TIMEOUT;
-    }
-}
-
-esp_err_t bap_handle_wifi_ip_response(const char *value) {
-    if (!value) {
-        return ESP_ERR_INVALID_ARG;
-    }
-    
-    ESP_LOGI(TAG, "Received WiFi IP: %s", value);
-    
-    if (lvgl_port_lock(100)) {
-        wifi_update_ip(value);
-        lvgl_port_unlock();
-        return ESP_OK;
-    } else {
-        ESP_LOGW(TAG, "Failed to acquire LVGL mutex for WiFi IP update");
-        return ESP_ERR_TIMEOUT;
-    }
-}
-
-esp_err_t bap_handle_wifi_password_response(const char *value) {
-    if (!value) {
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    ESP_LOGI(TAG, "Received WiFi password");
-
-    if (lvgl_port_lock(100)) {
-        wifi_update_password(value);
-        lvgl_port_unlock();
-        return ESP_OK;
-    } else {
-        ESP_LOGW(TAG, "Failed to acquire LVGL mutex for WiFi password update");
         return ESP_ERR_TIMEOUT;
     }
 }

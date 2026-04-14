@@ -1,12 +1,10 @@
 #include "wifi.h"
 #include "home.h"
-#include "bap.h"
 #include "settings.h"
 #include "night.h"
 #include "block.h"
 #include "clock.h"
-#include "price.h"
-#include "mempool.h"
+#include "usb_bridge.h"
 #include "stdio.h"
 #include "string.h"
 #include "custom_fonts.h"
@@ -14,6 +12,7 @@
 #include "esp_event.h"
 #include "esp_log.h"
 #include "esp_netif.h"
+#include "esp_private/wifi.h"
 #include "esp_timer.h"
 #include "nvs_flash.h"
 #include "freertos/FreeRTOS.h"
@@ -25,8 +24,6 @@ static const char* TAG = "wifi_screen";
 static wifi_ap_record_t *scan_results = NULL;
 static uint16_t scan_count = 0;
 static bool scan_in_progress = false;
-static bool scan_completed = false;
-static bool scan_event_received = false;
 
 static lv_obj_t * wifi_screen = NULL;
 static lv_obj_t * ssid_label = NULL;
@@ -43,8 +40,6 @@ static bool wifi_initialized = false;
 static bool wifi_event_handlers_registered = false;
 static bool wifi_connect_pending = false;
 static esp_netif_t *wifi_sta_netif = NULL;
-static bool wifi_bap_ssid_received = false;
-static bool wifi_bap_password_received = false;
 
 typedef enum {
     WIFI_CONNECTION_STATE_DISCONNECTED = 0,
@@ -66,8 +61,8 @@ static wifi_info_t current_wifi_info = {
     .signal_strength = -45
 };
 
-static void wifi_try_connect_from_bap(void);
 static esp_err_t wifi_init_common(void);
+static esp_err_t wifi_connect_local(const char *ssid, const char *password);
 static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data);
 static void wifi_refresh_status_ui(void);
 static void wifi_set_connection_state(wifi_connection_state_t state);
@@ -274,22 +269,12 @@ static void wifi_scan_done_handler(void)
         lv_dropdown_set_options(ssid_dropdown, "No networks found");
     }
     
-    // Reset scan flags
     scan_in_progress = false;
-    scan_completed = false;
 }
 
 static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
 {
     LV_UNUSED(arg);
-
-    if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_SCAN_DONE) {
-        ESP_LOGI(TAG, "WIFI_EVENT_SCAN_DONE received");
-        // Set flag for LVGL task to process - don't call handler from event context
-        // (event task has small stack, LVGL operations must be on LVGL task)
-        scan_event_received = true;
-        return;
-    }
 
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
         if (wifi_connect_pending) {
@@ -299,6 +284,12 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t e
     }
 
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
+        wifi_event_sta_disconnected_t *event = (wifi_event_sta_disconnected_t *)event_data;
+        ESP_LOGI(TAG, "WiFi STA disconnected, reason=%d", event ? event->reason : -1);
+        esp_wifi_internal_reg_rxcb(ESP_IF_WIFI_STA, NULL);
+        usb_bridge_set_network_link(false);
+        current_wifi_info.ip_address[0] = '\0';
+
         if (wifi_connect_pending) {
             wifi_set_connection_state(WIFI_CONNECTION_STATE_CONNECTING);
             esp_wifi_connect();
@@ -310,18 +301,19 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t e
         return;
     }
 
+    if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_CONNECTED) {
+        ESP_LOGI(TAG, "WiFi STA connected, waiting for IP before enabling ECM bridge");
+        return;
+    }
+
     if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
         ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
-        // Don't update IP address here - use BAP-provided IP instead
-        // snprintf(current_wifi_info.ip_address, sizeof(current_wifi_info.ip_address), IPSTR, IP2STR(&event->ip_info.ip));
-        LV_UNUSED(event);
+        snprintf(current_wifi_info.ip_address, sizeof(current_wifi_info.ip_address),
+                 IPSTR, IP2STR(&event->ip_info.ip));
+        ESP_LOGI(TAG, "WiFi STA got IP: " IPSTR, IP2STR(&event->ip_info.ip));
+        esp_wifi_internal_reg_rxcb(ESP_IF_WIFI_STA, usb_bridge_send_network_packet);
+        usb_bridge_set_network_link(true);
         wifi_set_connection_state(WIFI_CONNECTION_STATE_CONNECTED);
-        // Don't update IP label here - will be updated via BAP protocol
-        // if (ip_label) {
-        //     char ip_text[32];
-        //     snprintf(ip_text, sizeof(ip_text), "IP: %s", current_wifi_info.ip_address);
-        //     lv_label_set_text(ip_label, ip_text);
-        // }
         return;
     }
 }
@@ -375,10 +367,21 @@ static esp_err_t wifi_init_common(void)
         return ret;
     }
 
+    ret = esp_wifi_set_storage(WIFI_STORAGE_RAM);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to set WiFi storage: %s", esp_err_to_name(ret));
+        return ret;
+    }
+
     ret = esp_wifi_start();
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to start WiFi: %s", esp_err_to_name(ret));
         return ret;
+    }
+
+    ret = esp_wifi_set_ps(WIFI_PS_NONE);
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to disable WiFi power save: %s", esp_err_to_name(ret));
     }
 
     wifi_initialized = true;
@@ -390,19 +393,6 @@ static esp_err_t wifi_init_common(void)
 static esp_err_t wifi_init_for_scan(void)
 {
     return wifi_init_common();
-}
-
-// Check scan completion (called from LVGL task)
-static void wifi_check_scan_completion(void)
-{
-    // Process scan completion when event was received
-    // This runs in LVGL task context where it's safe to update UI and allocate memory
-    if (scan_event_received && scan_in_progress && !scan_completed) {
-        scan_event_received = false;
-        esp_wifi_scan_get_ap_num(&scan_count);
-        scan_completed = true;
-        wifi_scan_done_handler();
-    }
 }
 
 // Create a bottom navigation button
@@ -711,9 +701,7 @@ void wifi_screen_create(void)
     // Bottom navigation buttons
     create_bottom_nav_btn(bottom_nav, LV_SYMBOL_HOME, wifi_home_clicked, false);
     create_bottom_nav_btn_img(bottom_nav, &cube_solid_full, wifi_block_clicked, false);
-    create_bottom_nav_btn_img(bottom_nav, &cubes_solid_full, wifi_mempool_clicked, false);
     create_bottom_nav_btn_img(bottom_nav, &clock_solid_full, wifi_clock_clicked, false);
-    create_bottom_nav_btn(bottom_nav, "$", wifi_price_clicked, false);
     create_bottom_nav_btn(bottom_nav, LV_SYMBOL_WIFI, NULL, true);  // WiFi is active
     create_bottom_nav_btn(bottom_nav, LV_SYMBOL_SETTINGS, wifi_settings_clicked, false);
     create_bottom_nav_btn(bottom_nav, LV_SYMBOL_EYE_OPEN, wifi_night_clicked, false);
@@ -737,9 +725,6 @@ void wifi_screen_destroy(void)
             scan_results = NULL;
         }
         scan_in_progress = false;
-        scan_completed = false;
-        scan_event_received = false;
-
         lv_obj_del(wifi_screen);
         wifi_screen = NULL;
         ssid_label = NULL;
@@ -775,21 +760,6 @@ void wifi_update_info(const wifi_info_t* info)
     }
 }
 
-void wifi_update_ssid(const char* ssid)
-{
-    if(ssid) {
-        strncpy(current_wifi_info.ssid, ssid, sizeof(current_wifi_info.ssid) - 1);
-        current_wifi_info.ssid[sizeof(current_wifi_info.ssid) - 1] = '\0';
-        wifi_bap_ssid_received = true;
-        
-        // Update display elements if they exist
-        if(ssid_label) {
-            lv_label_set_text(ssid_label, current_wifi_info.ssid);
-        }
-        wifi_try_connect_from_bap();
-    }
-}
-
 void wifi_update_rssi(const char* rssi)
 {
     if(rssi) {
@@ -803,38 +773,6 @@ void wifi_update_rssi(const char* rssi)
 
         wifi_refresh_status_ui();
     }
-}
-
-void wifi_update_ip(const char* ip)
-{
-    if(ip) {
-        strncpy(current_wifi_info.ip_address, ip, sizeof(current_wifi_info.ip_address) - 1);
-        current_wifi_info.ip_address[sizeof(current_wifi_info.ip_address) - 1] = '\0';
-
-        if (current_wifi_info.ip_address[0] != '\0' &&
-            strcmp(current_wifi_info.ip_address, "0.0.0.0") != 0) {
-            wifi_set_connection_state(WIFI_CONNECTION_STATE_CONNECTED);
-        }
-
-        wifi_refresh_status_ui();
-    }
-}
-
-void wifi_update_password(const char* password)
-{
-    if (!password) {
-        return;
-    }
-
-    strncpy(current_wifi_info.password, password, sizeof(current_wifi_info.password) - 1);
-    current_wifi_info.password[sizeof(current_wifi_info.password) - 1] = '\0';
-    wifi_bap_password_received = true;
-
-    if (password_ta) {
-        lv_textarea_set_text(password_ta, current_wifi_info.password);
-    }
-
-    wifi_try_connect_from_bap();
 }
 
 bool wifi_is_connected(void)
@@ -874,8 +812,6 @@ lv_obj_t* wifi_get_screen(void)
 // Task handler - call this periodically from main LVGL task
 void wifi_task_handler(void)
 {
-    wifi_check_scan_completion();
-
     if (wifi_connection_state == WIFI_CONNECTION_STATE_CONNECTING &&
         wifi_connect_deadline_us > 0 &&
         esp_timer_get_time() >= wifi_connect_deadline_us) {
@@ -911,6 +847,8 @@ void wifi_update_ssid_list(const char* ssids[], int count)
 
 void wifi_connect_clicked(lv_event_t * e)
 {
+    LV_UNUSED(e);
+
     // Get SSID from dropdown and password from text area
     if(ssid_dropdown && password_ta) {
         char selected_ssid[64] = {0};
@@ -927,49 +865,51 @@ void wifi_connect_clicked(lv_event_t * e)
 
         strncpy(current_wifi_info.ssid, selected_ssid, sizeof(current_wifi_info.ssid) - 1);
         current_wifi_info.ssid[sizeof(current_wifi_info.ssid) - 1] = '\0';
+        strncpy(current_wifi_info.password, password, sizeof(current_wifi_info.password) - 1);
+        current_wifi_info.password[sizeof(current_wifi_info.password) - 1] = '\0';
         current_wifi_info.ip_address[0] = '\0';
-        wifi_bap_ssid_received = false;
-        wifi_bap_password_received = false;
         wifi_set_connection_state(WIFI_CONNECTION_STATE_CONNECTING);
         if (ssid_label) {
             lv_label_set_text(ssid_label, current_wifi_info.ssid);
         }
 
-        BAP_send_ssid(selected_ssid);
-        BAP_send_password(password);
+        wifi_connect_local(selected_ssid, password);
     }
 }
 
-static void wifi_try_connect_from_bap(void)
+static esp_err_t wifi_connect_local(const char *ssid, const char *password)
 {
-    if (!wifi_bap_ssid_received || !wifi_bap_password_received) {
-        return;
-    }
-
-    if (current_wifi_info.ssid[0] == '\0') {
-        return;
+    if (!ssid || ssid[0] == '\0') {
+        return ESP_ERR_INVALID_ARG;
     }
 
     esp_err_t ret = wifi_init_common();
     if (ret != ESP_OK) {
-        return;
+        return ret;
     }
 
     wifi_config_t wifi_config = {0};
-    strncpy((char *)wifi_config.sta.ssid, current_wifi_info.ssid, sizeof(wifi_config.sta.ssid) - 1);
-    strncpy((char *)wifi_config.sta.password, current_wifi_info.password, sizeof(wifi_config.sta.password) - 1);
+    strncpy((char *)wifi_config.sta.ssid, ssid, sizeof(wifi_config.sta.ssid) - 1);
+    if (password) {
+        strncpy((char *)wifi_config.sta.password, password, sizeof(wifi_config.sta.password) - 1);
+    }
     wifi_config.sta.ssid[sizeof(wifi_config.sta.ssid) - 1] = '\0';
     wifi_config.sta.password[sizeof(wifi_config.sta.password) - 1] = '\0';
+    wifi_config.sta.pmf_cfg.capable = true;
 
     ret = esp_wifi_set_config(WIFI_IF_STA, &wifi_config);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to set WiFi config: %s", esp_err_to_name(ret));
-        return;
+        return ret;
     }
 
     wifi_connect_pending = true;
-    esp_wifi_connect();
+    ret = esp_wifi_connect();
+    if (ret != ESP_OK) {
+        return ret;
+    }
     wifi_set_connection_state(WIFI_CONNECTION_STATE_CONNECTING);
+    return ESP_OK;
 }
 
 void wifi_scan_clicked(lv_event_t * e)
@@ -1006,21 +946,18 @@ void wifi_scan_clicked(lv_event_t * e)
             }
         }
     };
-    
-    scan_in_progress = true;
-    scan_completed = false;
-    scan_event_received = false;
 
-    // Start the WiFi scan (asynchronous)
-    ret = esp_wifi_scan_start(&scan_config, false);
-    if(ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to start WiFi scan: %s", esp_err_to_name(ret));
-        lv_dropdown_set_options(ssid_dropdown, "Scan start failed");
+    scan_in_progress = true;
+    ret = esp_wifi_scan_start(&scan_config, true);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to run WiFi scan: %s", esp_err_to_name(ret));
+        lv_dropdown_set_options(ssid_dropdown, "Scan failed");
         scan_in_progress = false;
         return;
     }
-    
-    ESP_LOGI(TAG, "WiFi scan started...");
+
+    esp_wifi_scan_get_ap_num(&scan_count);
+    wifi_scan_done_handler();
 }
 
 void wifi_home_clicked(lv_event_t * e)
@@ -1037,24 +974,10 @@ void wifi_block_clicked(lv_event_t * e)
     wifi_screen_destroy();
 }
 
-void wifi_mempool_clicked(lv_event_t * e)
-{
-    mempool_screen_create();
-    lv_scr_load(mempool_get_screen());
-    wifi_screen_destroy();
-}
-
 void wifi_clock_clicked(lv_event_t * e)
 {
     clock_screen_create();
     lv_scr_load(clock_get_screen());
-    wifi_screen_destroy();
-}
-
-void wifi_price_clicked(lv_event_t * e)
-{
-    price_screen_create();
-    lv_scr_load(price_get_screen());
     wifi_screen_destroy();
 }
 

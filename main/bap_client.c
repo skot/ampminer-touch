@@ -14,7 +14,7 @@
 #include "esp_task_wdt.h"
 #include "bap_client.h"
 #include "bap_protocol.h"
-#include "bap_uart.h"
+#include "bap_transport.h"
 #include "bap_parser.h"
 
 static const char *TAG = "BAP_CLIENT";
@@ -27,17 +27,15 @@ static bool subscribed_power = false;
 static bool subscribed_fan_rpm = false;
 static bool subscribed_shares = false;
 static bool subscribed_best_difficulty = false;
-static bool subscribed_wifi = false;
 static bool subscribed_block_height = false;
-static bool subscribed_wifi_password = false;
 static uint32_t last_response_time = 0;
 
 // Task handles for suspend/resume
-static TaskHandle_t uart_receive_task_handle = NULL;
+static TaskHandle_t transport_receive_task_handle = NULL;
 static TaskHandle_t connection_monitor_task_handle = NULL;
 
-static void uart_send_task(void *pvParameters);
-static void uart_receive_task(void *pvParameters);
+static void transport_send_task(void *pvParameters);
+static void transport_receive_task(void *pvParameters);
 static void connection_monitor_task(void *pvParameters);
 
 esp_err_t bap_client_init(void) {
@@ -48,23 +46,23 @@ esp_err_t bap_client_init(void) {
         return ESP_OK;
     }
     
-    esp_err_t ret = bap_uart_init();
+    esp_err_t ret = bap_transport_init();
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "UART initialization failed: %s", esp_err_to_name(ret));
+        ESP_LOGE(TAG, "BAP transport initialization failed: %s", esp_err_to_name(ret));
         return ret;
     }
     
-    ESP_LOGI(TAG, "Creating UART tasks...");
+    ESP_LOGI(TAG, "Creating BAP transport tasks...");
 
-    BaseType_t task_ret = xTaskCreate(uart_send_task, "uart_send", 4096, NULL, 5, NULL);
+    BaseType_t task_ret = xTaskCreate(transport_send_task, "bap_tx", 4096, NULL, 5, NULL);
     if (task_ret != pdPASS) {
-        ESP_LOGE(TAG, "Failed to create UART send task");
+        ESP_LOGE(TAG, "Failed to create BAP send task");
         return ESP_FAIL;
     }
 
-    task_ret = xTaskCreate(uart_receive_task, "uart_receive", 4096, NULL, 5, &uart_receive_task_handle);
+    task_ret = xTaskCreate(transport_receive_task, "bap_rx", 4096, NULL, 5, &transport_receive_task_handle);
     if (task_ret != pdPASS) {
-        ESP_LOGE(TAG, "Failed to create UART receive task");
+        ESP_LOGE(TAG, "Failed to create BAP receive task");
         return ESP_FAIL;
     }
 
@@ -90,7 +88,7 @@ esp_err_t bap_client_subscribe(const char *parameter) {
         return ret;
     }
     
-    ret = bap_uart_write(message, strlen(message));
+    ret = bap_transport_write(message, strlen(message));
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to send subscription for %s", parameter);
         return ret;
@@ -112,7 +110,7 @@ esp_err_t bap_client_request(const char *parameter) {
         return ret;
     }
     
-    ret = bap_uart_write(message, strlen(message));
+    ret = bap_transport_write(message, strlen(message));
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to send request for %s", parameter);
         return ret;
@@ -130,7 +128,7 @@ esp_err_t bap_client_send_frequency_setting(float frequency_mhz) {
         return ret;
     }
     
-    ret = bap_uart_write(message, strlen(message));
+    ret = bap_transport_write(message, strlen(message));
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to send frequency setting");
         return ret;
@@ -148,7 +146,7 @@ esp_err_t bap_client_send_asic_voltage(float voltage) {
         return ret;
     }
     
-    ret = bap_uart_write(message, strlen(message));
+    ret = bap_transport_write(message, strlen(message));
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to send voltage setting");
         return ret;
@@ -170,7 +168,7 @@ esp_err_t bap_client_send_fan_speed(int speed_percent) {
         return ret;
     }
     
-    ret = bap_uart_write(message, strlen(message));
+    ret = bap_transport_write(message, strlen(message));
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to send fan speed setting");
         return ret;
@@ -188,57 +186,13 @@ esp_err_t bap_client_send_automatic_fan_control(bool enabled) {
         return ret;
     }
     
-    ret = bap_uart_write(message, strlen(message));
+    ret = bap_transport_write(message, strlen(message));
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to send auto fan control setting");
         return ret;
     }
     
     ESP_LOGI(TAG, "Sent auto fan control setting: %s", message);
-    return ESP_OK;
-}
-
-esp_err_t bap_client_send_ssid(const char *ssid) {
-    if (!ssid || strlen(ssid) == 0) {
-        return ESP_ERR_INVALID_ARG;
-    }
-    
-    char message[BAP_MAX_MESSAGE_LEN];
-    esp_err_t ret = bap_format_message(message, sizeof(message), BAP_CMD_SET, "ssid", ssid);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to format SSID message");
-        return ret;
-    }
-    
-    ret = bap_uart_write(message, strlen(message));
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to send SSID setting");
-        return ret;
-    }
-    
-    ESP_LOGI(TAG, "Sent SSID setting: %s", message);
-    return ESP_OK;
-}
-
-esp_err_t bap_client_send_password(const char *password) {
-    if (!password || strlen(password) == 0) {
-        return ESP_ERR_INVALID_ARG;
-    }
-    
-    char message[BAP_MAX_MESSAGE_LEN];
-    esp_err_t ret = bap_format_message(message, sizeof(message), BAP_CMD_SET, "password", password);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to format password message");
-        return ret;
-    }
-    
-    ret = bap_uart_write(message, strlen(message));
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to send password setting");
-        return ret;
-    }
-    
-    ESP_LOGI(TAG, "Sent password setting: %s", message);
     return ESP_OK;
 }
 
@@ -258,9 +212,7 @@ void bap_client_reset_connection_state(void) {
     subscribed_fan_rpm = false;
     subscribed_shares = false;
     subscribed_best_difficulty = false;
-    subscribed_wifi = false;
     subscribed_block_height = false;
-    subscribed_wifi_password = false;
     last_response_time = 0;
 }
 
@@ -292,20 +244,6 @@ static esp_err_t bap_subscribe_shares(void) {
     return ret;
 }
 
-static esp_err_t bap_subscribe_wifi(void) {
-    if (subscribed_wifi) {
-        ESP_LOGW(TAG, "Already subscribed to WiFi, skipping");
-        return ESP_OK;
-    }
-
-    esp_err_t ret = bap_client_subscribe("wifi");
-    if (ret == ESP_OK) {
-        subscribed_wifi = true;
-        ESP_LOGI(TAG, "Subscribed to WiFi");
-    }
-    return ret;
-}
-
 static esp_err_t bap_subscribe_block_height(void) {
     if (subscribed_block_height) {
         ESP_LOGW(TAG, "Already subscribed to block height, skipping");
@@ -316,20 +254,6 @@ static esp_err_t bap_subscribe_block_height(void) {
     if (ret == ESP_OK) {
         subscribed_block_height = true;
         ESP_LOGI(TAG, "Subscribed to block height");
-    }
-    return ret;
-}
-
-static esp_err_t bap_subscribe_wifi_password(void) {
-    if (subscribed_wifi_password) {
-        ESP_LOGW(TAG, "Already subscribed to WiFi password, skipping");
-        return ESP_OK;
-    }
-
-    esp_err_t ret = bap_client_subscribe("wifi_password");
-    if (ret == ESP_OK) {
-        subscribed_wifi_password = true;
-        ESP_LOGI(TAG, "Subscribed to WiFi password");
     }
     return ret;
 }
@@ -403,7 +327,7 @@ static esp_err_t bap_request_system_info(void) {
     return ret;
 }
 
-static void uart_send_task(void *pvParameters) {
+static void transport_send_task(void *pvParameters) {
     if (subscriptions_sent) {
         ESP_LOGI(TAG, "Subscriptions already sent, exiting task");
         vTaskDelete(NULL);
@@ -426,11 +350,7 @@ static void uart_send_task(void *pvParameters) {
     vTaskDelay(pdMS_TO_TICKS(100));  // Wait a bit before next subscription
     bap_subscribe_best_difficulty();
     vTaskDelay(pdMS_TO_TICKS(100));  // Wait a bit before next subscription
-    bap_subscribe_wifi();
-    vTaskDelay(pdMS_TO_TICKS(100));  // Wait a bit before next subscription
     bap_subscribe_block_height();
-    vTaskDelay(pdMS_TO_TICKS(100));  // Wait a bit before next subscription
-    bap_subscribe_wifi_password();
     vTaskDelay(pdMS_TO_TICKS(100));  // Wait a bit
     bap_request_system_info();
     
@@ -439,12 +359,14 @@ static void uart_send_task(void *pvParameters) {
     vTaskDelete(NULL);
 }
 
-static void uart_receive_task(void *pvParameters) {
-    static uint8_t buffer[1024]; // Use constant instead of bap_uart_get_buffer_size()
+static void transport_receive_task(void *pvParameters) {
+    static uint8_t rx_buffer[256];
+    static char line_buffer[1024];
+    size_t line_len = 0;
     
     esp_err_t wdt_ret = esp_task_wdt_add(NULL);
     if (wdt_ret != ESP_OK) {
-        ESP_LOGW(TAG, "Failed to add UART receive task to watchdog: %s", esp_err_to_name(wdt_ret));
+        ESP_LOGW(TAG, "Failed to add BAP receive task to watchdog: %s", esp_err_to_name(wdt_ret));
     }
     
     while (1) {
@@ -452,28 +374,36 @@ static void uart_receive_task(void *pvParameters) {
             esp_task_wdt_reset();
         }
         
-        int len = bap_uart_read(buffer, sizeof(buffer), 100);
+        int len = bap_transport_read(rx_buffer, sizeof(rx_buffer), 100);
         if (len > 0) {
-            buffer[len] = '\0';
-            
-            char *message_start = (char*)buffer;
-            char *message_end;
-            
-            while ((message_end = strstr(message_start, "\r\n")) != NULL) {
-                *message_end = '\0';
-                
-                if (message_start[0] == '$') {
-                    last_response_time = xTaskGetTickCount();
-                    bap_parse_and_handle_message(message_start);
+            for (int i = 0; i < len; ++i) {
+                char ch = (char)rx_buffer[i];
+
+                if (line_len < sizeof(line_buffer) - 1) {
+                    line_buffer[line_len++] = ch;
+                    line_buffer[line_len] = '\0';
+                } else {
+                    line_len = 0;
+                    continue;
                 }
-                
-                message_start = message_end + 2; // Skip \r\n
-            }
-            
-            // Handle case where last message doesn't end with \r\n
-            if (strlen(message_start) > 0 && message_start[0] == '$') {
-                last_response_time = xTaskGetTickCount();
-                bap_parse_and_handle_message(message_start);
+
+                if (line_len >= 2 &&
+                    line_buffer[line_len - 2] == '\r' &&
+                    line_buffer[line_len - 1] == '\n') {
+                    line_buffer[line_len - 2] = '\0';
+                    if (line_buffer[0] == '$') {
+                        last_response_time = xTaskGetTickCount();
+                        bap_parse_and_handle_message(line_buffer);
+                    }
+                    line_len = 0;
+                } else if (ch == '\n') {
+                    line_buffer[line_len - 1] = '\0';
+                    if (line_buffer[0] == '$') {
+                        last_response_time = xTaskGetTickCount();
+                        bap_parse_and_handle_message(line_buffer);
+                    }
+                    line_len = 0;
+                }
             }
         }
         
@@ -507,9 +437,9 @@ static void connection_monitor_task(void *pvParameters) {
             
             bap_client_reset_connection_state();
             
-            BaseType_t task_ret = xTaskCreate(uart_send_task, "uart_send_retry", 4096, NULL, 5, NULL);
+            BaseType_t task_ret = xTaskCreate(transport_send_task, "bap_tx_retry", 4096, NULL, 5, NULL);
             if (task_ret != pdPASS) {
-                ESP_LOGE(TAG, "Failed to create retry UART send task");
+                ESP_LOGE(TAG, "Failed to create retry BAP send task");
             } else {
                 ESP_LOGI(TAG, "Created retry task to re-establish connection");
             }
@@ -530,16 +460,16 @@ void bap_client_suspend(void) {
     ESP_LOGW(TAG, "║  SUSPENDING BAP CLIENT TASKS         ║");
     ESP_LOGW(TAG, "╚═══════════════════════════════════════╝");
 
-    if (uart_receive_task_handle != NULL) {
+    if (transport_receive_task_handle != NULL) {
         // Remove from watchdog before suspending
-        esp_err_t ret = esp_task_wdt_delete(uart_receive_task_handle);
+        esp_err_t ret = esp_task_wdt_delete(transport_receive_task_handle);
         if (ret != ESP_OK) {
-            ESP_LOGW(TAG, "Failed to remove uart_receive from watchdog: %s", esp_err_to_name(ret));
+            ESP_LOGW(TAG, "Failed to remove bap_rx from watchdog: %s", esp_err_to_name(ret));
         }
-        vTaskSuspend(uart_receive_task_handle);
-        ESP_LOGW(TAG, "✓ UART receive task suspended");
+        vTaskSuspend(transport_receive_task_handle);
+        ESP_LOGW(TAG, "✓ BAP receive task suspended");
     } else {
-        ESP_LOGW(TAG, "✗ UART receive task handle is NULL");
+        ESP_LOGW(TAG, "✗ BAP receive task handle is NULL");
     }
 
     if (connection_monitor_task_handle != NULL) {
@@ -564,16 +494,16 @@ void bap_client_resume(void) {
     ESP_LOGW(TAG, "║  RESUMING BAP CLIENT TASKS           ║");
     ESP_LOGW(TAG, "╚═══════════════════════════════════════╝");
 
-    if (uart_receive_task_handle != NULL) {
-        vTaskResume(uart_receive_task_handle);
+    if (transport_receive_task_handle != NULL) {
+        vTaskResume(transport_receive_task_handle);
         // Re-add to watchdog after resuming
-        esp_err_t ret = esp_task_wdt_add(uart_receive_task_handle);
+        esp_err_t ret = esp_task_wdt_add(transport_receive_task_handle);
         if (ret != ESP_OK) {
-            ESP_LOGW(TAG, "Failed to re-add uart_receive to watchdog: %s", esp_err_to_name(ret));
+            ESP_LOGW(TAG, "Failed to re-add bap_rx to watchdog: %s", esp_err_to_name(ret));
         }
-        ESP_LOGW(TAG, "✓ UART receive task resumed");
+        ESP_LOGW(TAG, "✓ BAP receive task resumed");
     } else {
-        ESP_LOGW(TAG, "✗ UART receive task handle is NULL");
+        ESP_LOGW(TAG, "✗ BAP receive task handle is NULL");
     }
 
     if (connection_monitor_task_handle != NULL) {

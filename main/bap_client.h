@@ -14,7 +14,7 @@ extern "C" {
 
 /**
  * @brief Initialize BAP client
- * Creates UART tasks and initializes communication
+ * Creates CDC transport tasks and initializes communication
  * @return ESP_OK on success, error code otherwise
  */
 esp_err_t bap_client_init(void);
@@ -63,20 +63,6 @@ esp_err_t bap_client_send_fan_speed(int speed_percent);
 esp_err_t bap_client_send_automatic_fan_control(bool enabled);
 
 /**
- * @brief Send SSID setting
- * @param ssid SSID string
- * @return ESP_OK on success, error code otherwise
- */
-esp_err_t bap_client_send_ssid(const char *ssid);
-
-/**
- * @brief Send password setting
- * @param password Password string
- * @return ESP_OK on success, error code otherwise
- */
-esp_err_t bap_client_send_password(const char *password);
-
-/**
  * @brief Check if BAP client is connected
  * @return true if connected (recent response received), false otherwise
  */
@@ -90,13 +76,13 @@ void bap_client_reset_connection_state(void);
 
 /**
  * @brief Suspend BAP client tasks (for OTA updates)
- * Suspends UART receive and connection monitor tasks to prevent display updates
+ * Suspends transport receive and connection monitor tasks to prevent display updates
  */
 void bap_client_suspend(void);
 
 /**
  * @brief Resume BAP client tasks (after OTA updates)
- * Resumes UART receive and connection monitor tasks
+ * Resumes transport receive and connection monitor tasks
  */
 void bap_client_resume(void);
 

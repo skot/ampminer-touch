@@ -4,8 +4,6 @@
 #include "wifi.h"
 #include "block.h"
 #include "clock.h"
-#include "price.h"
-#include "mempool.h"
 #include "bap.h"
 #include "custom_fonts.h"
 #include "stdio.h"
@@ -307,9 +305,7 @@ static void create_bottom_nav(void)
 
     create_bottom_nav_btn(bottom_nav, LV_SYMBOL_HOME, night_home_clicked, false);
     create_bottom_nav_btn_img(bottom_nav, &cube_solid_full, night_block_clicked, false);
-    create_bottom_nav_btn_img(bottom_nav, &cubes_solid_full, night_mempool_clicked, false);
     create_bottom_nav_btn_img(bottom_nav, &clock_solid_full, night_clock_clicked, false);
-    create_bottom_nav_btn(bottom_nav, "$", night_price_clicked, false);
     create_bottom_nav_btn(bottom_nav, LV_SYMBOL_WIFI, night_wifi_clicked, false);
     create_bottom_nav_btn(bottom_nav, LV_SYMBOL_SETTINGS, night_settings_clicked, false);
     create_bottom_nav_btn(bottom_nav, LV_SYMBOL_EYE_OPEN, NULL, true);
@@ -388,27 +384,12 @@ void night_block_clicked(lv_event_t *e)
     night_screen_destroy();
 }
 
-void night_mempool_clicked(lv_event_t *e)
-{
-    mempool_screen_create();
-    lv_scr_load(mempool_get_screen());
-    night_screen_destroy();
-}
-
 void night_clock_clicked(lv_event_t *e)
 {
     clock_screen_create();
     lv_scr_load(clock_get_screen());
     night_screen_destroy();
 }
-
-void night_price_clicked(lv_event_t *e)
-{
-    price_screen_create();
-    lv_scr_load(price_get_screen());
-    night_screen_destroy();
-}
-
 void night_settings_clicked(lv_event_t *e)
 {
     settings_screen_create();

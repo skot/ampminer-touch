@@ -60,7 +60,5 @@ void home_night_clicked(lv_event_t * e);
 void home_wifi_clicked(lv_event_t * e);
 void home_block_clicked(lv_event_t * e);
 void home_clock_clicked(lv_event_t * e);
-void home_price_clicked(lv_event_t * e);
-void home_mempool_clicked(lv_event_t * e);
 
 #endif // HOME_H

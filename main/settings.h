@@ -32,8 +32,6 @@ void settings_timezone_changed(lv_event_t * e);
 void settings_home_clicked(lv_event_t * e);
 void settings_block_clicked(lv_event_t * e);
 void settings_clock_clicked(lv_event_t * e);
-void settings_price_clicked(lv_event_t * e);
-void settings_mempool_clicked(lv_event_t * e);
 void settings_wifi_clicked(lv_event_t * e);
 void settings_night_clicked(lv_event_t * e);
 

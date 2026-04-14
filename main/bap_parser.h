@@ -107,32 +107,11 @@ esp_err_t bap_handle_pool_port_response(const char *value);
 esp_err_t bap_handle_pool_user_response(const char *value);
 
 /**
- * @brief Handle WiFi SSID response
- * @param value WiFi SSID string
- * @return ESP_OK on success, error code otherwise
- */
-esp_err_t bap_handle_wifi_ssid_response(const char *value);
-
-/**
  * @brief Handle WiFi RSSI response
  * @param value WiFi RSSI string
  * @return ESP_OK on success, error code otherwise
  */
 esp_err_t bap_handle_wifi_rssi_response(const char *value);
-
-/**
- * @brief Handle WiFi IP response
- * @param value WiFi IP address string
- * @return ESP_OK on success, error code otherwise
- */
-esp_err_t bap_handle_wifi_ip_response(const char *value);
-
-/**
- * @brief Handle WiFi password response
- * @param value WiFi password string
- * @return ESP_OK on success, error code otherwise
- */
-esp_err_t bap_handle_wifi_password_response(const char *value);
 
 /**
  * @brief Handle block height response
