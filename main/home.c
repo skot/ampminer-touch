@@ -3,7 +3,6 @@
 #include "settings.h"
 #include "night.h"
 #include "block.h"
-#include "clock.h"
 #include "stdio.h"
 #include "string.h"
 #include "custom_fonts.h"
@@ -583,7 +582,6 @@ void home_screen_create(void)
 
     create_bottom_nav_btn(bottom_nav, LV_SYMBOL_HOME, NULL, true);
     create_bottom_nav_btn_img(bottom_nav, &cube_solid_full, home_block_clicked, false);
-    create_bottom_nav_btn_img(bottom_nav, &clock_solid_full, home_clock_clicked, false);
     create_bottom_nav_btn(bottom_nav, LV_SYMBOL_WIFI, home_wifi_clicked, false);
     create_bottom_nav_btn(bottom_nav, LV_SYMBOL_SETTINGS, home_settings_clicked, false);
     create_bottom_nav_btn(bottom_nav, LV_SYMBOL_EYE_OPEN, home_night_clicked, false);
@@ -662,13 +660,6 @@ void home_wifi_clicked(lv_event_t *e)
 {
     wifi_screen_create();
     lv_scr_load(wifi_get_screen());
-    home_screen_destroy();
-}
-
-void home_clock_clicked(lv_event_t *e)
-{
-    clock_screen_create();
-    lv_scr_load(clock_get_screen());
     home_screen_destroy();
 }
 

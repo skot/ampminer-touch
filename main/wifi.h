@@ -35,7 +35,6 @@ void wifi_disconnect_clicked(lv_event_t * e);
 void wifi_scan_clicked(lv_event_t * e);
 void wifi_home_clicked(lv_event_t * e);
 void wifi_block_clicked(lv_event_t * e);
-void wifi_clock_clicked(lv_event_t * e);
 void wifi_settings_clicked(lv_event_t * e);
 void wifi_night_clicked(lv_event_t * e);
 
