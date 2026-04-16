@@ -1,5 +1,4 @@
 #include "home.h"
-#include "wifi.h"
 #include "settings.h"
 #include "night.h"
 #include "block.h"
@@ -266,10 +265,10 @@ static void create_pool_popup(void)
 
     lv_obj_t *bridge_label = lv_label_create(bridge_box);
     lv_label_set_text(bridge_label,
-                      "GT Touch forwards\n"
-                      "USB ECM traffic to\n"
-                      "Wi-Fi and keeps BAP\n"
-                      "on USB CDC.");
+                      "GT Touch receives\n"
+                      "all miner data over\n"
+                      "the USB CDC serial\n"
+                      "connection.");
     lv_obj_set_style_text_color(bridge_label, COLOR_TEXT_PRIMARY, 0);
     lv_obj_set_style_text_font(bridge_label, &lv_font_montserrat_16, 0);
     lv_obj_set_style_text_align(bridge_label, LV_TEXT_ALIGN_CENTER, 0);
@@ -277,8 +276,8 @@ static void create_pool_popup(void)
 
     lv_obj_t *bridge_hint = lv_label_create(bridge_cont);
     lv_label_set_text(bridge_hint,
-                      "Reach the host directly over the LAN.\n"
-                      "The GT Touch does not expose its own web UI.");
+                      "No Wi-Fi or USB networking is required.\n"
+                      "The display uses the existing BAP CDC link.");
     lv_label_set_long_mode(bridge_hint, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(bridge_hint, 250);
     lv_obj_set_style_text_align(bridge_hint, LV_TEXT_ALIGN_CENTER, 0);
@@ -582,7 +581,6 @@ void home_screen_create(void)
 
     create_bottom_nav_btn(bottom_nav, LV_SYMBOL_HOME, NULL, true);
     create_bottom_nav_btn_img(bottom_nav, &cube_solid_full, home_block_clicked, false);
-    create_bottom_nav_btn(bottom_nav, LV_SYMBOL_WIFI, home_wifi_clicked, false);
     create_bottom_nav_btn(bottom_nav, LV_SYMBOL_SETTINGS, home_settings_clicked, false);
     create_bottom_nav_btn(bottom_nav, LV_SYMBOL_EYE_OPEN, home_night_clicked, false);
 
@@ -653,13 +651,6 @@ void home_night_clicked(lv_event_t *e)
     // Navigate to night mode screen
     night_screen_create();
     lv_scr_load(night_get_screen());
-    home_screen_destroy();
-}
-
-void home_wifi_clicked(lv_event_t *e)
-{
-    wifi_screen_create();
-    lv_scr_load(wifi_get_screen());
     home_screen_destroy();
 }
 

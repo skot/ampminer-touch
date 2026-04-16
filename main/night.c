@@ -1,7 +1,6 @@
 #include "night.h"
 #include "home.h"
 #include "settings.h"
-#include "wifi.h"
 #include "block.h"
 #include "bap.h"
 #include "custom_fonts.h"
@@ -304,7 +303,6 @@ static void create_bottom_nav(void)
 
     create_bottom_nav_btn(bottom_nav, LV_SYMBOL_HOME, night_home_clicked, false);
     create_bottom_nav_btn_img(bottom_nav, &cube_solid_full, night_block_clicked, false);
-    create_bottom_nav_btn(bottom_nav, LV_SYMBOL_WIFI, night_wifi_clicked, false);
     create_bottom_nav_btn(bottom_nav, LV_SYMBOL_SETTINGS, night_settings_clicked, false);
     create_bottom_nav_btn(bottom_nav, LV_SYMBOL_EYE_OPEN, NULL, true);
 }
@@ -365,13 +363,6 @@ void night_home_clicked(lv_event_t *e)
 {
     home_screen_create();
     lv_scr_load(home_get_screen());
-    night_screen_destroy();
-}
-
-void night_wifi_clicked(lv_event_t *e)
-{
-    wifi_screen_create();
-    lv_scr_load(wifi_get_screen());
     night_screen_destroy();
 }
 

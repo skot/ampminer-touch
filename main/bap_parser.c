@@ -12,7 +12,6 @@
 #include "bap_parser.h"
 #include "bap_protocol.h"
 #include "home.h"
-#include "wifi.h"
 #include "block.h"
 #include "lvgl_port.h"
 
@@ -90,8 +89,6 @@ esp_err_t bap_handle_response(const bap_message_t *msg) {
         ret = bap_handle_best_difficulty_response(msg->value);
     } else if (strcmp(msg->parameter, "voltage") == 0) {
         ESP_LOGI(TAG, "Received voltage: %s", msg->value);
-    } else if (strcmp(msg->parameter, "wifi_rssi") == 0) {
-        ret = bap_handle_wifi_rssi_response(msg->value);
     } else if (strcmp(msg->parameter, "block_height") == 0) {
         ret = bap_handle_block_height_response(msg->value);
     } else if (strcmp(msg->parameter, "mode") == 0) {
@@ -308,23 +305,6 @@ esp_err_t bap_handle_pool_user_response(const char *value) {
     }
 }
 
-esp_err_t bap_handle_wifi_rssi_response(const char *value) {
-    if (!value) {
-        return ESP_ERR_INVALID_ARG;
-    }
-    
-    ESP_LOGI(TAG, "Received WiFi RSSI: %s", value);
-    
-    if (lvgl_port_lock(100)) {
-        wifi_update_rssi(value);
-        lvgl_port_unlock();
-        return ESP_OK;
-    } else {
-        ESP_LOGW(TAG, "Failed to acquire LVGL mutex for WiFi RSSI update");
-        return ESP_ERR_TIMEOUT;
-    }
-}
-
 esp_err_t bap_handle_block_height_response(const char *value) {
     if (!value) {
         return ESP_ERR_INVALID_ARG;
@@ -348,12 +328,7 @@ esp_err_t bap_handle_mode(const char *value) {
     }
     
     ESP_LOGI(TAG, "Received mode: %s", value);
-    
-
     if (lvgl_port_lock(100)) {
-        if(strcmp(value, "ap_mode") == 0) {
-            home_wifi_clicked(NULL);
-        }
         lvgl_port_unlock();
         return ESP_OK;
     } else {

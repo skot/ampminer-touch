@@ -4,7 +4,7 @@
 [![ST7262](https://img.shields.io/badge/LCD-ST7262-green)](https://ifan-display.com/product/5-inch-touch-screen-st7262-driver-ctp-gt911-800x480/)
 [![GT911](https://img.shields.io/badge/Touch-GT911-orange)](https://goodix.com/)
 [![LVGL](https://img.shields.io/badge/GUI-LVGL-purple)](https://lvgl.io/)
-[![ESP-IDF](https://img.shields.io/badge/Framework-ESP--IDF_5.4.1-red)](https://docs.espressif.com/projects/esp-idf/en/latest/)
+[![ESP-IDF](https://img.shields.io/badge/Framework-ESP--IDF-red)](https://docs.espressif.com/projects/esp-idf/en/latest/)
 
 A sophisticated touchscreen display addon for Bitaxe miners, featuring a 4.3-inch ST7262 RGB LCD with GT911 capacitive touch controller. This is the **first official addon** to utilize the **Bitaxe Accessory Port (BAP)** for seamless integration with Bitaxe hardware.
 
@@ -15,7 +15,7 @@ A sophisticated touchscreen display addon for Bitaxe miners, featuring a 4.3-inc
 - **BAP Integration**: First-class support for the new Bitaxe Accessory Port protocol
 - **Real-time Mining Dashboard**: Live hashrate, temperature, power consumption monitoring
 - **Advanced Brightness Control**: PWM-based backlight with TPS61161 driver (0-100% range)
-- **WiFi Configuration**: Touch-friendly network setup interface
+- **USB CDC Data Path**: Mining data and control ride over the existing USB CDC serial link
 - **Settings Management**: Hardware configuration, display preferences, mining parameters
 - **Smooth UI**: LVGL-powered interface with custom fonts and graphics
 - **Power Efficient**: Optimized for continuous operation with mining hardware
@@ -36,13 +36,12 @@ A sophisticated touchscreen display addon for Bitaxe miners, featuring a 4.3-inc
 - **CPU**: Dual-core Xtensa LX7 @ 240MHz
 - **Flash**: 8MB
 - **RAM**: 512KB + 8MB PSRAM
-- **WiFi**: 802.11 b/g/n 2.4GHz
 - **GPIO**: Dedicated pins for RGB interface and touch I2C
 
 ### Connectivity
 - **Primary**: Bitaxe Accessory Port (BAP) via UART
-- **Secondary**: I2C for touch controller
-- **Wireless**: WiFi for network configuration
+- **Secondary**: USB CDC serial for host communication
+- **Control**: I2C for touch controller
 
 ## 📋 Pin Configuration
 
@@ -73,7 +72,7 @@ Protocol:     Custom BAP protocol for Bitaxe communication
 
 ### Prerequisites
 
-- **ESP-IDF 5.4.1**: [Installation Guide](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/get-started/)
+- **ESP-IDF**: [Installation Guide](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/get-started/)
 - **Compatible Bitaxe**: Any Bitaxe model with BAP support
 - **Hardware**: Assembled Bitaxe GT Touch display module
 
@@ -82,7 +81,7 @@ Protocol:     Custom BAP protocol for Bitaxe communication
 1. **Clone the repository**:
    ```bash
    git clone https://github.com/bitaxeorg/BAP-GT-TOUCH.git
-   cd 4.3LCD-ST7262-GT911
+   cd BAP-GT-TOUCH
    ```
 
 2. **Set ESP32-S3 target**:
@@ -120,17 +119,8 @@ Comprehensive configuration options:
 
 - **Display Settings**: Brightness control (0-100%), screen timeout
 - **Mining Parameters**: Frequency, voltage, fan control
-- **Network Config**: WiFi SSID/password setup
 - **Hardware Control**: ASIC voltage, automatic fan control
 - **System Info**: Firmware version, hardware details
-
-### WiFi Setup (`wifi.c`)
-Touch-optimized network configuration:
-
-- **Network Scanning**: Automatic WiFi network detection
-- **Password Entry**: On-screen keyboard for credentials
-- **Connection Status**: Real-time connection feedback
-- **Signal Strength**: Visual indicator for network quality
 
 ### Night Mode
 Night friendly mode with reduced brightness and eye-friendly colors
@@ -147,6 +137,8 @@ This project implements the complete BAP protocol stack:
 - **`bap_parser.c/h`**: Message parsing and validation
 - **`bap_uart.c/h`**: UART communication layer
 
+The GT Touch now uses the existing USB CDC serial link for host-side data and control. Wi-Fi provisioning and USB ECM networking are no longer part of the firmware.
+
 ### Available BAP Commands
 
 ```c
@@ -159,10 +151,6 @@ bap_client_subscribe("power");
 bap_client_send_frequency_setting(500.0);  // Set frequency in MHz
 bap_client_send_fan_speed(75);             // Set fan speed (0-100%)
 bap_client_send_asic_voltage(1200);        // Set ASIC voltage in mV
-
-// Network configuration
-bap_client_send_ssid("MyNetwork");
-bap_client_send_password("MyPassword");
 
 // System requests
 bap_client_request("systemInfo");
@@ -225,7 +213,6 @@ GT911 capacitive touch controller features:
 │   ├── main.c                # Application entry point
 │   ├── home.c/h              # Main dashboard UI
 │   ├── settings.c/h          # Settings interface
-│   ├── wifi.c/h              # WiFi configuration
 │   ├── loading.c/h           # Boot loading screen
 │   ├── night.c/h             # Night hashrate screen
 │   ├── bap_*.c/h             # BAP protocol implementation
@@ -296,7 +283,7 @@ GT911 capacitive touch controller features:
 ### Build Issues
 
 **Problem**: Compilation errors
-- Ensure ESP-IDF 5.4.1 is properly installed
+- Ensure ESP-IDF is properly installed and exported in your shell
 - Run `idf.py clean` before rebuilding
 - Check all submodules are properly initialized
 

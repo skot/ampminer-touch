@@ -15,7 +15,6 @@
 #include "esp_task_wdt.h"
 #include "lvgl.h"
 #include "lvgl_port.h"
-#include "wifi.h"
 
 static const char *TAG = "lv_port";                      // Tag for logging
 static SemaphoreHandle_t lvgl_mux;                       // LVGL mutex for synchronization
@@ -504,7 +503,6 @@ static void lvgl_port_task(void *arg)
         
         if (lvgl_port_lock(100)) { // Try to lock the LVGL mutex with timeout
             task_delay_ms = lv_timer_handler(); // Handle LVGL timer events
-            wifi_task_handler(); // Handle WiFi scan completion
             lvgl_port_unlock(); // Unlock the mutex
         } else {
             ESP_LOGW(TAG, "Failed to acquire LVGL mutex, skipping this cycle");
