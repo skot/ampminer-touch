@@ -139,6 +139,8 @@ This project implements the complete BAP protocol stack:
 
 The GT Touch now uses the existing USB CDC serial link for host-side data and control. Wi-Fi provisioning and USB ECM networking are no longer part of the firmware.
 
+For a host-side implementation guide, see [BAP_CLIENT_PROTOCOL.md](BAP_CLIENT_PROTOCOL.md).
+
 ### Available BAP Commands
 
 ```c

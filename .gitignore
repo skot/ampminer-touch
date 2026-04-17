@@ -29,6 +29,7 @@ flasher_args.json
 # Python cache files
 __pycache__
 *.pyc
+.venv/
 
 # Log files
 *.log
