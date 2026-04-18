@@ -41,11 +41,13 @@ lv_obj_t* home_get_screen(void);
 // Hardware data functions
 void home_update_hardware_info(const hardware_info_t* hw_info);
 void home_update_power(const char* power);
+void home_update_voltage(const char* voltage_mv);
 void update_efficiency_display(void);
 void home_update_temperature(const char* temperature);
 void home_update_device_model(const char* model);
 void home_update_asic_model(const char* chip);
 void home_update_fan_speed(const char* fan_rpm);
+void home_update_fan_setpoint(const char* fan_percent);
 void home_update_shares(const char* shares);
 void home_update_best_difficulty(const char* bd);
 

@@ -85,10 +85,12 @@ esp_err_t bap_handle_response(const bap_message_t *msg) {
         ret = bap_handle_pool_user_response(msg->value);
     } else if (strcmp(msg->parameter, "fan_speed") == 0) {
         ret = bap_handle_fan_rpm_response(msg->value);
+    } else if (strcmp(msg->parameter, "fan_speed_percent") == 0) {
+        ret = bap_handle_fan_speed_percent_response(msg->value);
     } else if (strcmp(msg->parameter, "best_difficulty") == 0) {
         ret = bap_handle_best_difficulty_response(msg->value);
     } else if (strcmp(msg->parameter, "voltage") == 0) {
-        ESP_LOGI(TAG, "Received voltage: %s", msg->value);
+        ret = bap_handle_voltage_response(msg->value);
     } else if (strcmp(msg->parameter, "block_height") == 0) {
         ret = bap_handle_block_height_response(msg->value);
     } else if (strcmp(msg->parameter, "mode") == 0) {
@@ -161,18 +163,45 @@ esp_err_t bap_handle_power_response(const char *value) {
     }
 }
 
+esp_err_t bap_handle_voltage_response(const char *value) {
+    if (!value) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    ESP_LOGI(TAG, "Received voltage: %s", value);
+
+    if (lvgl_port_lock(100)) {
+        home_update_voltage(value);
+        lvgl_port_unlock();
+        return ESP_OK;
+    } else {
+        ESP_LOGW(TAG, "Failed to acquire LVGL mutex for voltage update");
+        return ESP_ERR_TIMEOUT;
+    }
+}
+
 esp_err_t bap_handle_fan_rpm_response(const char *value) {
     if (!value) {
         return ESP_ERR_INVALID_ARG;
     }
     ESP_LOGI(TAG, "Received fan RPM: %s", value);
 
+    return ESP_OK;
+}
+
+esp_err_t bap_handle_fan_speed_percent_response(const char *value) {
+    if (!value) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    ESP_LOGI(TAG, "Received fan speed percent: %s", value);
+
     if (lvgl_port_lock(100)) {
-        home_update_fan_speed(value);
+        home_update_fan_setpoint(value);
         lvgl_port_unlock();
         return ESP_OK;
     } else {
-        ESP_LOGW(TAG, "Failed to acquire LVGL mutex for fan speed update");
+        ESP_LOGW(TAG, "Failed to acquire LVGL mutex for fan percent update");
         return ESP_ERR_TIMEOUT;
     }
 }

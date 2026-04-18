@@ -25,6 +25,7 @@ RESPONSE_MAP = {
     "temperature": "chipTemp",
     "power": "power",
     "fan_speed": "fan_speed",
+    "fan_speed_percent": "fan_speed_percent",
     "shares": "shares",
     "best_difficulty": "best_difficulty",
     "block_height": "block_height",
@@ -124,6 +125,9 @@ class DummyMinerState:
             else:
                 fan_rpm = 1500 + self.manual_fan_percent * 48
             return str(int(round(fan_rpm)))
+
+        if response_parameter == "fan_speed_percent":
+            return str(self.manual_fan_percent)
 
         if response_parameter == "shares":
             return str(self.shares)
@@ -281,6 +285,7 @@ class DummyBAPServer:
                 self.send_response("mode")
                 self.send_response("voltage")
                 self.send_response("fan_speed")
+                self.send_response("fan_speed_percent")
             return
 
     def handle_subscription(self, parameter: str) -> None:

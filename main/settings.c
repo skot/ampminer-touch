@@ -31,6 +31,8 @@ static settings_info_t current_settings = {
     .auto_fan_control = true,
     .fan_speed_percent = 50,
     .brightness_percent = 100};
+static int applied_fan_speed_percent = 50;
+static float applied_asic_voltage_mv = 1200.0f;
 
 static int current_timezone_index = 0;
 static bool timezone_applied = false;
@@ -60,6 +62,19 @@ static const char *timezone_values[] = {
 
 #define SETTINGS_NVS_NAMESPACE "settings"
 #define SETTINGS_NVS_TZ_INDEX_KEY "tz_index"
+
+static float settings_voltage_for_mode(performance_mode_t mode)
+{
+    switch (mode)
+    {
+    case PERFORMANCE_LOW:
+        return 1160.0f;
+    case PERFORMANCE_MEDIUM:
+    case PERFORMANCE_HIGH:
+    default:
+        return 1200.0f;
+    }
+}
 
 static lv_obj_t *create_settings_button(lv_obj_t *parent, const char *text, lv_event_cb_t event_cb, bool active)
 {
@@ -590,11 +605,23 @@ lv_obj_t *settings_get_screen(void)
     return settings_screen;
 }
 
+int settings_get_fan_speed_percent(void)
+{
+    return applied_fan_speed_percent;
+}
+
+float settings_get_asic_voltage_mv(void)
+{
+    return applied_asic_voltage_mv;
+}
+
 void settings_update_info(const settings_info_t *info)
 {
     if (info)
     {
         current_settings = *info;
+        applied_fan_speed_percent = info->fan_speed_percent;
+        applied_asic_voltage_mv = settings_voltage_for_mode(info->performance_mode);
         update_performance_buttons();
         update_fan_controls();
 
@@ -626,31 +653,37 @@ void settings_update_info(const settings_info_t *info)
 void settings_performance_low_clicked(lv_event_t *e)
 {
     current_settings.performance_mode = PERFORMANCE_LOW;
+    applied_asic_voltage_mv = settings_voltage_for_mode(current_settings.performance_mode);
     update_performance_buttons();
+    home_update_voltage(NULL);
     printf("Performance mode set to LOW\n");
 
     BAP_send_frequency_setting(575.0f);
-    BAP_send_asic_voltage(1160.0f);
+    BAP_send_asic_voltage(applied_asic_voltage_mv);
 }
 
 void settings_performance_medium_clicked(lv_event_t *e)
 {
     current_settings.performance_mode = PERFORMANCE_MEDIUM;
+    applied_asic_voltage_mv = settings_voltage_for_mode(current_settings.performance_mode);
     update_performance_buttons();
+    home_update_voltage(NULL);
     printf("Performance mode set to MEDIUM\n");
 
     BAP_send_frequency_setting(600.0f);
-    BAP_send_asic_voltage(1200.0f);
+    BAP_send_asic_voltage(applied_asic_voltage_mv);
 }
 
 void settings_performance_high_clicked(lv_event_t *e)
 {
     current_settings.performance_mode = PERFORMANCE_HIGH;
+    applied_asic_voltage_mv = settings_voltage_for_mode(current_settings.performance_mode);
     update_performance_buttons();
+    home_update_voltage(NULL);
     printf("Performance mode set to HIGH\n");
 
     BAP_send_frequency_setting(655.0f);
-    BAP_send_asic_voltage(1200.0f);
+    BAP_send_asic_voltage(applied_asic_voltage_mv);
 }
 
 void settings_auto_fan_toggled(lv_event_t *e)
@@ -681,6 +714,9 @@ void settings_fan_save_clicked(lv_event_t *e)
     printf("Saving fan settings - Auto: %s, Speed: %d%%\n",
            current_settings.auto_fan_control ? "ON" : "OFF",
            current_settings.fan_speed_percent);
+
+    applied_fan_speed_percent = current_settings.fan_speed_percent;
+    home_update_fan_setpoint(NULL);
 
     if (current_settings.auto_fan_control)
     {

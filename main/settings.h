@@ -20,6 +20,8 @@ void settings_screen_create(void);
 void settings_screen_destroy(void);
 lv_obj_t* settings_get_screen(void);
 void settings_update_info(const settings_info_t* info);
+int settings_get_fan_speed_percent(void);
+float settings_get_asic_voltage_mv(void);
 
 void settings_performance_low_clicked(lv_event_t * e);
 void settings_performance_medium_clicked(lv_event_t * e);

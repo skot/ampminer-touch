@@ -62,7 +62,9 @@ About 7 seconds after boot, the GT Touch sends this startup sequence with roughl
 $BAP,SUB,hashrate
 $BAP,SUB,temperature
 $BAP,SUB,power
+$BAP,SUB,voltage
 $BAP,SUB,fan_speed
+$BAP,SUB,fan_speed_percent
 $BAP,SUB,shares
 $BAP,SUB,best_difficulty
 $BAP,SUB,block_height
@@ -86,7 +88,9 @@ The subscription names are not always the same as the response parameter names. 
 | `SUB hashrate` | `RES hashrate` |
 | `SUB temperature` | `RES chipTemp` |
 | `SUB power` | `RES power` |
+| `SUB voltage` | `RES voltage` |
 | `SUB fan_speed` | `RES fan_speed` |
+| `SUB fan_speed_percent` | `RES fan_speed_percent` |
 | `SUB shares` | `RES shares` |
 | `SUB best_difficulty` | `RES best_difficulty` |
 | `SUB block_height` | `RES block_height` |
@@ -112,7 +116,7 @@ The current UI uses these fields as follows:
 - `poolPort`: shown in the pool popup
 - `poolUser`: shown in the pool popup
 - `mode`: accepted but not currently displayed
-- `voltage`: logged but not currently displayed
+- `voltage`: shown on the lightning-bolt card as volts
 
 ## Expected Value Formats
 
@@ -122,8 +126,9 @@ Send plain strings without units unless noted otherwise.
 | --- | --- | --- |
 | `hashrate` | `1234.56` | Displayed directly, also parsed as a float for efficiency/night mode |
 | `chipTemp` | `54.25` | Parsed as float and redisplayed as `54.25C` |
-| `power` | `18.4` | Display shows `W` automatically |
-| `fan_speed` | `6120` | Display shows `RPM` automatically |
+| `power` | `18.4` | Used for efficiency calculation |
+| `fan_speed` | `6120` | Used as live RPM telemetry only |
+| `fan_speed_percent` | `75` | Display shows `%` automatically |
 | `shares` | `42` | Displayed directly |
 | `best_difficulty` | `1024` | Displayed directly |
 | `block_height` | `891234` | Parsed as integer |
@@ -141,7 +146,9 @@ Send plain strings without units unless noted otherwise.
 $BAP,RES,hashrate,1234.56*02
 $BAP,RES,chipTemp,54.25*2D
 $BAP,RES,power,18.4*57
+$BAP,RES,voltage,1200.00*74
 $BAP,RES,fan_speed,6120*6F
+$BAP,RES,fan_speed_percent,75*16
 $BAP,RES,shares,42*23
 $BAP,RES,best_difficulty,1024*70
 $BAP,RES,block_height,891234*17
@@ -226,7 +233,9 @@ For a stable integration, the host should:
 GT Touch -> $BAP,SUB,hashrate
 GT Touch -> $BAP,SUB,temperature
 GT Touch -> $BAP,SUB,power
+GT Touch -> $BAP,SUB,voltage
 GT Touch -> $BAP,SUB,fan_speed
+GT Touch -> $BAP,SUB,fan_speed_percent
 GT Touch -> $BAP,SUB,shares
 GT Touch -> $BAP,SUB,best_difficulty
 GT Touch -> $BAP,SUB,block_height
@@ -241,7 +250,9 @@ Host -> $BAP,RES,poolUser,my-worker*39
 Host -> $BAP,RES,hashrate,1234.56*02
 Host -> $BAP,RES,chipTemp,54.25*2D
 Host -> $BAP,RES,power,18.4*57
+Host -> $BAP,RES,voltage,1200.00*74
 Host -> $BAP,RES,fan_speed,6120*6F
+Host -> $BAP,RES,fan_speed_percent,75*16
 Host -> $BAP,RES,shares,42*23
 Host -> $BAP,RES,best_difficulty,1024*70
 Host -> $BAP,RES,block_height,891234*17

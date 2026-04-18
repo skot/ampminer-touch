@@ -25,7 +25,7 @@ static lv_obj_t *bd_label = NULL;
 static float current_power_watts = 0.0f;
 static float current_hashrate_ghs = 0.0f;
 static char current_hashrate_text[16] = "";
-static char current_power_text[16] = "";
+static char current_voltage_text[16] = "";
 static char current_temperature_text[16] = "";
 static char current_fan_text[16] = "";
 static char current_shares_text[32] = "";
@@ -45,6 +45,8 @@ static pool_info_t current_pool_info = {
 static void hardware_popup_close_clicked(lv_event_t *e);
 static void pool_popup_close_clicked(lv_event_t *e);
 static void apply_cached_home_values(void);
+static void format_voltage_text(char *output, size_t output_size, const char *voltage_mv);
+static void format_fan_setpoint_text(char *output, size_t output_size, const char *fan_percent);
 
 static lv_obj_t *create_nav_button(lv_obj_t *parent, const char *text, lv_event_cb_t event_cb)
 {
@@ -303,7 +305,14 @@ static void apply_cached_home_values(void)
     }
     if (power_label)
     {
-        lv_label_set_text(power_label, strlen(current_power_text) ? current_power_text : "loading...");
+        if (strlen(current_voltage_text))
+        {
+            lv_label_set_text(power_label, current_voltage_text);
+        }
+        else
+        {
+            home_update_voltage(NULL);
+        }
     }
     if (temperature_label)
     {
@@ -311,7 +320,14 @@ static void apply_cached_home_values(void)
     }
     if (fan_label)
     {
-        lv_label_set_text(fan_label, strlen(current_fan_text) ? current_fan_text : "loading...");
+        if (strlen(current_fan_text))
+        {
+            lv_label_set_text(fan_label, current_fan_text);
+        }
+        else
+        {
+            home_update_fan_setpoint(NULL);
+        }
     }
     if (shares_label)
     {
@@ -325,6 +341,18 @@ static void apply_cached_home_values(void)
     {
         lv_label_set_text(efficiency_label, strlen(current_efficiency_text) ? current_efficiency_text : "-- J/TH");
     }
+}
+
+static void format_voltage_text(char *output, size_t output_size, const char *voltage_mv)
+{
+    float voltage_value_mv = voltage_mv ? atof(voltage_mv) : settings_get_asic_voltage_mv();
+    snprintf(output, output_size, "%.2fV", voltage_value_mv / 1000.0f);
+}
+
+static void format_fan_setpoint_text(char *output, size_t output_size, const char *fan_percent)
+{
+    int fan_setpoint = fan_percent ? atoi(fan_percent) : settings_get_fan_speed_percent();
+    snprintf(output, output_size, "%d%%", fan_setpoint);
 }
 
 static lv_obj_t *create_bottom_nav_btn(lv_obj_t *parent, const char *symbol, lv_event_cb_t event_cb, bool active)
@@ -681,18 +709,21 @@ void home_update_power(const char *power)
         return;
     }
 
-    char power_buffer[16];
-    snprintf(power_buffer, sizeof(power_buffer), "%sW", power);
-    strncpy(current_power_text, power_buffer, sizeof(current_power_text) - 1);
-    current_power_text[sizeof(current_power_text) - 1] = '\0';
+    current_power_watts = atof(power);
+    update_efficiency_display();
+}
+
+void home_update_voltage(const char *voltage_mv)
+{
+    char voltage_buffer[16];
+    format_voltage_text(voltage_buffer, sizeof(voltage_buffer), voltage_mv);
+    strncpy(current_voltage_text, voltage_buffer, sizeof(current_voltage_text) - 1);
+    current_voltage_text[sizeof(current_voltage_text) - 1] = '\0';
 
     if (power_label)
     {
-        lv_label_set_text(power_label, power_buffer);
+        lv_label_set_text(power_label, current_voltage_text);
     }
-
-    current_power_watts = atof(power);
-    update_efficiency_display();
 }
 
 void update_efficiency_display(void)
@@ -739,19 +770,19 @@ void home_update_temperature(const char *temperature)
 
 void home_update_fan_speed(const char *fan_rpm)
 {
-    if (!fan_rpm)
-    {
-        return;
-    }
+    (void)fan_rpm;
+}
 
-    char fan_rpm_buffer[16];
-    snprintf(fan_rpm_buffer, sizeof(fan_rpm_buffer), "%s RPM", fan_rpm);
-    strncpy(current_fan_text, fan_rpm_buffer, sizeof(current_fan_text) - 1);
+void home_update_fan_setpoint(const char *fan_percent)
+{
+    char fan_setpoint_buffer[16];
+    format_fan_setpoint_text(fan_setpoint_buffer, sizeof(fan_setpoint_buffer), fan_percent);
+    strncpy(current_fan_text, fan_setpoint_buffer, sizeof(current_fan_text) - 1);
     current_fan_text[sizeof(current_fan_text) - 1] = '\0';
 
     if (fan_label)
     {
-        lv_label_set_text(fan_label, fan_rpm_buffer);
+        lv_label_set_text(fan_label, fan_setpoint_buffer);
     }
 }
 

@@ -24,7 +24,9 @@ static bool system_info_requested = false;
 static bool subscribed_hashrate = false;
 static bool subscribed_temperature = false;
 static bool subscribed_power = false;
+static bool subscribed_voltage = false;
 static bool subscribed_fan_rpm = false;
+static bool subscribed_fan_speed_percent = false;
 static bool subscribed_shares = false;
 static bool subscribed_best_difficulty = false;
 static bool subscribed_block_height = false;
@@ -209,7 +211,9 @@ void bap_client_reset_connection_state(void) {
     subscribed_hashrate = false;
     subscribed_temperature = false;
     subscribed_power = false;
+    subscribed_voltage = false;
     subscribed_fan_rpm = false;
+    subscribed_fan_speed_percent = false;
     subscribed_shares = false;
     subscribed_best_difficulty = false;
     subscribed_block_height = false;
@@ -299,6 +303,20 @@ static esp_err_t bap_subscribe_power(void) {
     return ret;
 }
 
+static esp_err_t bap_subscribe_voltage(void) {
+    if (subscribed_voltage) {
+        ESP_LOGW(TAG, "Already subscribed to voltage, skipping");
+        return ESP_OK;
+    }
+
+    esp_err_t ret = bap_client_subscribe("voltage");
+    if (ret == ESP_OK) {
+        subscribed_voltage = true;
+        ESP_LOGI(TAG, "Subscribed to voltage");
+    }
+    return ret;
+}
+
 static esp_err_t bap_subscribe_fan_rpm(void) {
     if( subscribed_fan_rpm) {
         ESP_LOGW(TAG, "Already subscribed to fan RPM, skipping");
@@ -309,6 +327,20 @@ static esp_err_t bap_subscribe_fan_rpm(void) {
     if (ret == ESP_OK) {
         subscribed_fan_rpm = true;
         ESP_LOGI(TAG, "Subscribed to fan RPM");
+    }
+    return ret;
+}
+
+static esp_err_t bap_subscribe_fan_speed_percent(void) {
+    if (subscribed_fan_speed_percent) {
+        ESP_LOGW(TAG, "Already subscribed to fan speed percent, skipping");
+        return ESP_OK;
+    }
+
+    esp_err_t ret = bap_client_subscribe("fan_speed_percent");
+    if (ret == ESP_OK) {
+        subscribed_fan_speed_percent = true;
+        ESP_LOGI(TAG, "Subscribed to fan speed percent");
     }
     return ret;
 }
@@ -344,7 +376,11 @@ static void transport_send_task(void *pvParameters) {
     vTaskDelay(pdMS_TO_TICKS(100));  // Wait a bit before next subscription
     bap_subscribe_power();
     vTaskDelay(pdMS_TO_TICKS(100));  // Wait a bit before next subscription
+    bap_subscribe_voltage();
+    vTaskDelay(pdMS_TO_TICKS(100));  // Wait a bit before next subscription
     bap_subscribe_fan_rpm();
+    vTaskDelay(pdMS_TO_TICKS(100));  // Wait a bit before next subscription
+    bap_subscribe_fan_speed_percent();
     vTaskDelay(pdMS_TO_TICKS(100));  // Wait a bit before next subscription
     bap_subscribe_shares();
     vTaskDelay(pdMS_TO_TICKS(100));  // Wait a bit before next subscription

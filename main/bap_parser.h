@@ -48,12 +48,26 @@ esp_err_t bap_handle_temperature_response(const char *value);
 esp_err_t bap_handle_power_response(const char *value);
 
 /**
+ * @brief Handle voltage response
+ * @param value Voltage value string in millivolts
+ * @return ESP_OK on success, error code otherwise
+ */
+esp_err_t bap_handle_voltage_response(const char *value);
+
+/**
  * @brief Handle fan RPM response
  * @param value Fan RPM value string
  * @return ESP_OK on success, error code otherwise
  
  */
 esp_err_t bap_handle_fan_rpm_response(const char *value);
+
+/**
+ * @brief Handle fan percent setpoint response
+ * @param value Fan speed percent string
+ * @return ESP_OK on success, error code otherwise
+ */
+esp_err_t bap_handle_fan_speed_percent_response(const char *value);
 
 /**
  * @brief Handle share response
