@@ -134,6 +134,27 @@ esp_err_t bap_handle_block_height_response(const char *value);
  */
 esp_err_t bap_handle_mode(const char *value);
 
+/**
+ * @brief Handle discovered Wi-Fi network response
+ * @param value SSID string
+ * @return ESP_OK on success, error code otherwise
+ */
+esp_err_t bap_handle_wifi_network_response(const char *value);
+
+/**
+ * @brief Handle Wi-Fi scan/connect status response
+ * @param value Status string
+ * @return ESP_OK on success, error code otherwise
+ */
+esp_err_t bap_handle_wifi_status_response(const char *value);
+
+/**
+ * @brief Handle Wi-Fi scan completion response
+ * @param value Status string
+ * @return ESP_OK on success, error code otherwise
+ */
+esp_err_t bap_handle_wifi_scan_done_response(const char *value);
+
 #ifdef __cplusplus
 }
 #endif

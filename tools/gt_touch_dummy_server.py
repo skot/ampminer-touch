@@ -65,6 +65,14 @@ class DummyMinerState:
     best_difficulty: int = 1024
     block_height: int = 891234
     mode: str = "normal"
+    wifi_ssid: str = ""
+    wifi_password: str = ""
+    wifi_status: str = "Disconnected"
+    wifi_networks: tuple[str, ...] = (
+        "Amlogic Lab",
+        "Hash Hut",
+        "Public-Pool-Setup",
+    )
     _last_share_update: float = field(default_factory=time.monotonic)
     _last_block_update: float = field(default_factory=time.monotonic)
 
@@ -84,6 +92,15 @@ class DummyMinerState:
             self.auto_fan = False
         elif parameter == "auto_fan":
             self.auto_fan = value not in {"0", "false", "False"}
+        elif parameter == "wifi_ssid":
+            self.wifi_ssid = value
+        elif parameter == "wifi_password":
+            self.wifi_password = value
+        elif parameter == "wifi_connect":
+            if self.wifi_ssid:
+                self.wifi_status = f"Connected to {self.wifi_ssid}"
+            else:
+                self.wifi_status = "No Wi-Fi network selected"
 
     def advance_counters(self, now: float) -> None:
         while now - self._last_share_update >= 5.0:
@@ -158,6 +175,9 @@ class DummyMinerState:
 
         if response_parameter == "voltage":
             return f"{self.asic_voltage_mv:.2f}"
+
+        if response_parameter == "wifiStatus":
+            return self.wifi_status
 
         raise KeyError(f"Unsupported response parameter: {response_parameter}")
 
@@ -286,6 +306,8 @@ class DummyBAPServer:
                 self.send_response("voltage")
                 self.send_response("fan_speed")
                 self.send_response("fan_speed_percent")
+            elif message.parameter == "wifi_connect":
+                self.send_response("wifiStatus")
             return
 
     def handle_subscription(self, parameter: str) -> None:
@@ -303,6 +325,13 @@ class DummyBAPServer:
         if parameter == "systemInfo":
             for response_parameter in SYSTEM_INFO_ORDER:
                 self.send_response(response_parameter)
+            return
+
+        if parameter == "wifiScan":
+            self.send_value("wifiStatus", "Scanning...")
+            for ssid in self.state.wifi_networks:
+                self.send_value("wifiNetwork", ssid)
+            self.send_value("wifiScanDone", f"{len(self.state.wifi_networks)} networks found")
             return
 
         self.log(f"Unhandled REQ parameter '{parameter}'")
@@ -328,6 +357,14 @@ class DummyBAPServer:
         self.state.advance_counters(now)
         elapsed = now - self.start_time
         value = self.state.metric_value(parameter, elapsed)
+        line = format_checked_message("RES", parameter, value)
+        self.serial_port.write(line.encode("ascii"))
+        self.serial_port.flush()
+        self.log(f"TX {line.strip()}")
+
+    def send_value(self, parameter: str, value: str) -> None:
+        assert self.serial_port is not None
+
         line = format_checked_message("RES", parameter, value)
         self.serial_port.write(line.encode("ascii"))
         self.serial_port.flush()

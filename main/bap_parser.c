@@ -13,6 +13,7 @@
 #include "bap_protocol.h"
 #include "home.h"
 #include "block.h"
+#include "settings.h"
 #include "lvgl_port.h"
 
 static const char *TAG = "BAP_PARSER";
@@ -95,6 +96,12 @@ esp_err_t bap_handle_response(const bap_message_t *msg) {
         ret = bap_handle_block_height_response(msg->value);
     } else if (strcmp(msg->parameter, "mode") == 0) {
         ret = bap_handle_mode(msg->value);
+    } else if (strcmp(msg->parameter, "wifiNetwork") == 0) {
+        ret = bap_handle_wifi_network_response(msg->value);
+    } else if (strcmp(msg->parameter, "wifiStatus") == 0) {
+        ret = bap_handle_wifi_status_response(msg->value);
+    } else if (strcmp(msg->parameter, "wifiScanDone") == 0) {
+        ret = bap_handle_wifi_scan_done_response(msg->value);
     } else {
         ESP_LOGI(TAG, "Received RES for %s: %s", msg->parameter, msg->value);
         // Unknown parameter, but not an error
@@ -362,6 +369,53 @@ esp_err_t bap_handle_mode(const char *value) {
         return ESP_OK;
     } else {
         ESP_LOGW(TAG, "Failed to acquire LVGL mutex for mode update");
+        return ESP_ERR_TIMEOUT;
+    }
+}
+
+esp_err_t bap_handle_wifi_network_response(const char *value) {
+    if (!value) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    ESP_LOGI(TAG, "Received Wi-Fi network: %s", value);
+
+    if (lvgl_port_lock(100)) {
+        settings_wifi_add_network(value);
+        lvgl_port_unlock();
+        return ESP_OK;
+    } else {
+        ESP_LOGW(TAG, "Failed to acquire LVGL mutex for Wi-Fi network update");
+        return ESP_ERR_TIMEOUT;
+    }
+}
+
+esp_err_t bap_handle_wifi_status_response(const char *value) {
+    if (!value) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    ESP_LOGI(TAG, "Received Wi-Fi status: %s", value);
+
+    if (lvgl_port_lock(100)) {
+        settings_wifi_update_status(value);
+        lvgl_port_unlock();
+        return ESP_OK;
+    } else {
+        ESP_LOGW(TAG, "Failed to acquire LVGL mutex for Wi-Fi status update");
+        return ESP_ERR_TIMEOUT;
+    }
+}
+
+esp_err_t bap_handle_wifi_scan_done_response(const char *value) {
+    ESP_LOGI(TAG, "Received Wi-Fi scan done: %s", value ? value : "");
+
+    if (lvgl_port_lock(100)) {
+        settings_wifi_finish_scan(value);
+        lvgl_port_unlock();
+        return ESP_OK;
+    } else {
+        ESP_LOGW(TAG, "Failed to acquire LVGL mutex for Wi-Fi scan done update");
         return ESP_ERR_TIMEOUT;
     }
 }

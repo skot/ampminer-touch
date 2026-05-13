@@ -63,6 +63,26 @@ esp_err_t bap_client_send_fan_speed(int speed_percent);
 esp_err_t bap_client_send_automatic_fan_control(bool enabled);
 
 /**
+ * @brief Send Wi-Fi SSID to the host-side control board service
+ * @param ssid Wi-Fi network name
+ * @return ESP_OK on success, error code otherwise
+ */
+esp_err_t bap_client_send_wifi_ssid(const char *ssid);
+
+/**
+ * @brief Send Wi-Fi password to the host-side control board service
+ * @param password Wi-Fi password
+ * @return ESP_OK on success, error code otherwise
+ */
+esp_err_t bap_client_send_wifi_password(const char *password);
+
+/**
+ * @brief Ask the host-side control board service to connect with the staged Wi-Fi credentials
+ * @return ESP_OK on success, error code otherwise
+ */
+esp_err_t bap_client_send_wifi_connect(void);
+
+/**
  * @brief Check if BAP client is connected
  * @return true if connected (recent response received), false otherwise
  */

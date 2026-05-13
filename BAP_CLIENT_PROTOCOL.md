@@ -202,6 +202,48 @@ $BAP,SET,fan_speed,75*6E
 
 The current firmware does not require an explicit acknowledgement for these `SET` commands. The host should simply apply them.
 
+## Wi-Fi Provisioning Extension
+
+The GT Touch can also drive Wi-Fi provisioning for an attached host/control board over the same USB CDC BAP link. The display does not configure Wi-Fi locally; the host-side service is responsible for scanning and applying credentials on the Antminer Amlogic control board.
+
+### Scan Flow
+
+When the user taps **SCAN** in Settings, the display sends:
+
+```text
+$BAP,REQ,wifiScan*3B
+```
+
+The host should answer with zero or more `wifiNetwork` responses, one SSID per line:
+
+```text
+$BAP,RES,wifiStatus,Scanning...*01
+$BAP,RES,wifiNetwork,MyNetwork*1E
+$BAP,RES,wifiNetwork,Shop WiFi*61
+$BAP,RES,wifiScanDone,2 networks found*7C
+```
+
+`wifiNetwork` values are displayed directly in the network picker. Send only the SSID as the value; RSSI/security metadata is not currently displayed.
+
+### Connect Flow
+
+When the user picks an SSID, enters a password, and taps **CONNECT**, the display sends:
+
+```text
+$BAP,SET,wifi_ssid,MyNetwork*14
+$BAP,SET,wifi_password,my-secret-password*71
+$BAP,SET,wifi_connect,1*3C
+```
+
+The host should stage the SSID/password values and attempt connection when it receives `wifi_connect=1`. Status can be sent at any time:
+
+```text
+$BAP,RES,wifiStatus,Connecting...*0E
+$BAP,RES,wifiStatus,Connected to MyNetwork*30
+```
+
+Passwords can contain commas because the parser treats everything after the third comma as the value. Passwords must not contain `*`, and the current value field is limited to 63 characters.
+
 ## Parser Constraints
 
 These limits come from the current firmware parser:

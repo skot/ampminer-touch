@@ -198,6 +198,68 @@ esp_err_t bap_client_send_automatic_fan_control(bool enabled) {
     return ESP_OK;
 }
 
+esp_err_t bap_client_send_wifi_ssid(const char *ssid) {
+    if (!ssid || ssid[0] == '\0') {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    char message[BAP_MAX_MESSAGE_LEN];
+    esp_err_t ret = bap_format_message(message, sizeof(message), BAP_CMD_SET, "wifi_ssid", ssid);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to format Wi-Fi SSID message");
+        return ret;
+    }
+
+    ret = bap_transport_write(message, strlen(message));
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to send Wi-Fi SSID");
+        return ret;
+    }
+
+    ESP_LOGI(TAG, "Sent Wi-Fi SSID setting");
+    return ESP_OK;
+}
+
+esp_err_t bap_client_send_wifi_password(const char *password) {
+    if (!password) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    char message[BAP_MAX_MESSAGE_LEN];
+    esp_err_t ret = bap_format_message(message, sizeof(message), BAP_CMD_SET, "wifi_password", password);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to format Wi-Fi password message");
+        return ret;
+    }
+
+    ret = bap_transport_write(message, strlen(message));
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to send Wi-Fi password");
+        return ret;
+    }
+
+    ESP_LOGI(TAG, "Sent Wi-Fi password setting");
+    return ESP_OK;
+}
+
+esp_err_t bap_client_send_wifi_connect(void) {
+    char message[BAP_MAX_MESSAGE_LEN];
+    esp_err_t ret = bap_format_message(message, sizeof(message), BAP_CMD_SET, "wifi_connect", "1");
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to format Wi-Fi connect message");
+        return ret;
+    }
+
+    ret = bap_transport_write(message, strlen(message));
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to send Wi-Fi connect request");
+        return ret;
+    }
+
+    ESP_LOGI(TAG, "Sent Wi-Fi connect request");
+    return ESP_OK;
+}
+
 bool bap_client_is_connected(void) {
     if (last_response_time == 0) return false;
     uint32_t current_time = xTaskGetTickCount();

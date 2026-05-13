@@ -28,6 +28,9 @@ extern "C" {
 #define BAP_send_fan_speed(speed) bap_client_send_fan_speed(speed)
 #define BAP_send_automatic_fan_control(enabled) bap_client_send_automatic_fan_control(enabled)
 #define BAP_send_asic_voltage(vol) bap_client_send_asic_voltage(vol)
+#define BAP_send_wifi_ssid(ssid) bap_client_send_wifi_ssid(ssid)
+#define BAP_send_wifi_password(password) bap_client_send_wifi_password(password)
+#define BAP_send_wifi_connect() bap_client_send_wifi_connect()
 #define BAP_reset_connection_state() bap_client_reset_connection_state()
 #define BAP_is_connected() bap_client_is_connected()
 
