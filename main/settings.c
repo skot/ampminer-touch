@@ -6,23 +6,13 @@
 #include "string.h"
 #include "custom_fonts.h"
 #include "bap.h"
-#include "waveshare_rgb_lcd_port.h"
-#include <stdlib.h>
-#include <time.h>
-#include "nvs_flash.h"
-#include "nvs.h"
 
 static lv_obj_t *settings_screen = NULL;
-static lv_obj_t *performance_low_btn = NULL;
-static lv_obj_t *performance_medium_btn = NULL;
-static lv_obj_t *performance_high_btn = NULL;
+static lv_obj_t *miner_ip_value_label = NULL;
 static lv_obj_t *auto_fan_checkbox = NULL;
 static lv_obj_t *fan_slider = NULL;
 static lv_obj_t *fan_value_label = NULL;
 static lv_obj_t *fan_save_btn = NULL;
-static lv_obj_t *brightness_slider = NULL;
-static lv_obj_t *brightness_value_label = NULL;
-static lv_obj_t *timezone_dropdown = NULL;
 static lv_obj_t *wifi_dropdown = NULL;
 static lv_obj_t *wifi_password_ta = NULL;
 static lv_obj_t *wifi_status_label = NULL;
@@ -40,50 +30,16 @@ static settings_info_t current_settings = {
 static int applied_fan_speed_percent = 50;
 static float applied_asic_voltage_mv = 1200.0f;
 
-static int current_timezone_index = 0;
-static bool timezone_applied = false;
+static char current_miner_ip[48] = "-";
 static char wifi_network_options[512] = "Tap Scan";
 static int wifi_network_count = 0;
 
-static const char *timezone_options =
-    "UTC\n"
-    "US/Pacific\n"
-    "US/Mountain\n"
-    "US/Central\n"
-    "US/Eastern\n"
-    "Europe/London\n"
-    "Europe/Berlin\n"
-    "Asia/Tokyo\n"
-    "Australia/Sydney";
-
-static const char *timezone_values[] = {
-    "UTC0",
-    "PST8PDT,M3.2.0/2,M11.1.0/2",
-    "MST7MDT,M3.2.0/2,M11.1.0/2",
-    "CST6CDT,M3.2.0/2,M11.1.0/2",
-    "EST5EDT,M3.2.0/2,M11.1.0/2",
-    "GMT0BST,M3.5.0/1,M10.5.0/2",
-    "CET-1CEST,M3.5.0/2,M10.5.0/3",
-    "JST-9",
-    "AEST-10AEDT,M10.1.0/2,M4.1.0/3",
-};
-
-#define SETTINGS_NVS_NAMESPACE "settings"
-#define SETTINGS_NVS_TZ_INDEX_KEY "tz_index"
 #define SETTINGS_BOTTOM_NAV_HEIGHT 64
 #define SETTINGS_WIFI_KEYBOARD_HEIGHT 170
 
-static float settings_voltage_for_mode(performance_mode_t mode)
+static float settings_voltage_for_mode(void)
 {
-    switch (mode)
-    {
-    case PERFORMANCE_LOW:
-        return 1160.0f;
-    case PERFORMANCE_MEDIUM:
-    case PERFORMANCE_HIGH:
-    default:
-        return 1200.0f;
-    }
+    return 1200.0f;
 }
 
 static lv_obj_t *create_settings_button(lv_obj_t *parent, const char *text, lv_event_cb_t event_cb, bool active)
@@ -165,130 +121,6 @@ static lv_obj_t *create_bottom_nav_btn_img(lv_obj_t *parent, const lv_img_dsc_t 
     }
 
     return btn;
-}
-
-static void update_performance_buttons(void)
-{
-    if (!performance_low_btn || !performance_medium_btn || !performance_high_btn)
-        return;
-
-    lv_obj_set_style_bg_color(performance_low_btn, COLOR_CARD_BG, 0);
-    lv_obj_t *low_label = lv_obj_get_child(performance_low_btn, 0);
-    if (low_label)
-        lv_obj_set_style_text_color(low_label, COLOR_ACCENT, 0);
-
-    lv_obj_set_style_bg_color(performance_medium_btn, COLOR_CARD_BG, 0);
-    lv_obj_t *medium_label = lv_obj_get_child(performance_medium_btn, 0);
-    if (medium_label)
-        lv_obj_set_style_text_color(medium_label, COLOR_ACCENT, 0);
-
-    lv_obj_set_style_bg_color(performance_high_btn, COLOR_CARD_BG, 0);
-    lv_obj_t *high_label = lv_obj_get_child(performance_high_btn, 0);
-    if (high_label)
-        lv_obj_set_style_text_color(high_label, COLOR_ACCENT, 0);
-
-    lv_obj_t *active_btn = NULL;
-    lv_obj_t *active_label = NULL;
-
-    switch (current_settings.performance_mode)
-    {
-    case PERFORMANCE_LOW:
-        active_btn = performance_low_btn;
-        active_label = low_label;
-        break;
-    case PERFORMANCE_MEDIUM:
-        active_btn = performance_medium_btn;
-        active_label = medium_label;
-        break;
-    case PERFORMANCE_HIGH:
-        active_btn = performance_high_btn;
-        active_label = high_label;
-        break;
-    }
-
-    if (active_btn && active_label)
-    {
-        lv_obj_set_style_bg_color(active_btn, COLOR_ACCENT, 0);
-        lv_obj_set_style_border_opa(active_btn, LV_OPA_TRANSP, 0);
-        lv_obj_set_style_text_color(active_label, COLOR_TEXT_ON_ACCENT, 0);
-    }
-}
-
-static void apply_timezone_by_index(int index)
-{
-    size_t tz_count = sizeof(timezone_values) / sizeof(timezone_values[0]);
-    if (index < 0 || (size_t)index >= tz_count)
-    {
-        return;
-    }
-
-    setenv("TZ", timezone_values[index], 1);
-    tzset();
-    timezone_applied = true;
-}
-
-static void settings_load_timezone(void)
-{
-    static bool nvs_ready = false;
-    if (!nvs_ready)
-    {
-        esp_err_t init_err = nvs_flash_init();
-        if (init_err == ESP_ERR_NVS_NO_FREE_PAGES || init_err == ESP_ERR_NVS_NEW_VERSION_FOUND)
-        {
-            nvs_flash_erase();
-            init_err = nvs_flash_init();
-        }
-        if (init_err != ESP_OK)
-        {
-            return;
-        }
-        nvs_ready = true;
-    }
-
-    nvs_handle_t handle;
-    esp_err_t err = nvs_open(SETTINGS_NVS_NAMESPACE, NVS_READONLY, &handle);
-    if (err != ESP_OK)
-    {
-        return;
-    }
-
-    int32_t saved_index = 0;
-    err = nvs_get_i32(handle, SETTINGS_NVS_TZ_INDEX_KEY, &saved_index);
-    nvs_close(handle);
-    if (err == ESP_OK)
-    {
-        current_timezone_index = (int)saved_index;
-    }
-}
-
-static void settings_save_timezone(int index)
-{
-    static bool nvs_ready = false;
-    if (!nvs_ready)
-    {
-        esp_err_t init_err = nvs_flash_init();
-        if (init_err == ESP_ERR_NVS_NO_FREE_PAGES || init_err == ESP_ERR_NVS_NEW_VERSION_FOUND)
-        {
-            nvs_flash_erase();
-            init_err = nvs_flash_init();
-        }
-        if (init_err != ESP_OK)
-        {
-            return;
-        }
-        nvs_ready = true;
-    }
-
-    nvs_handle_t handle;
-    esp_err_t err = nvs_open(SETTINGS_NVS_NAMESPACE, NVS_READWRITE, &handle);
-    if (err != ESP_OK)
-    {
-        return;
-    }
-
-    nvs_set_i32(handle, SETTINGS_NVS_TZ_INDEX_KEY, index);
-    nvs_commit(handle);
-    nvs_close(handle);
 }
 
 static void update_fan_controls(void)
@@ -413,6 +245,20 @@ void settings_wifi_finish_scan(const char *status)
     settings_wifi_update_status(status && status[0] ? status : "Scan complete");
 }
 
+void settings_update_miner_ip(const char *ip)
+{
+    if (!ip || ip[0] == '\0') {
+        ip = "-";
+    }
+
+    strncpy(current_miner_ip, ip, sizeof(current_miner_ip) - 1);
+    current_miner_ip[sizeof(current_miner_ip) - 1] = '\0';
+
+    if (miner_ip_value_label) {
+        lv_label_set_text(miner_ip_value_label, current_miner_ip);
+    }
+}
+
 #if LV_USE_KEYBOARD
 static void wifi_password_ta_event_cb(lv_event_t *e)
 {
@@ -511,8 +357,6 @@ void settings_screen_create(void)
         return;
     }
 
-    settings_load_timezone();
-
     settings_screen = lv_obj_create(NULL);
     lv_obj_set_style_bg_color(settings_screen, COLOR_BACKGROUND, 0);
     lv_obj_set_style_bg_opa(settings_screen, LV_OPA_COVER, 0);
@@ -540,39 +384,29 @@ void settings_screen_create(void)
     lv_obj_set_style_text_font(title_label, &lv_font_montserrat_28, 0);
     lv_obj_align(title_label, LV_ALIGN_TOP_MID, 0, 6);
 
-    lv_obj_t *perf_section = lv_obj_create(main_cont);
-    lv_obj_set_size(perf_section, 680, 110);
-    lv_obj_align(perf_section, LV_ALIGN_TOP_MID, 0, 46);
-    lv_obj_set_style_bg_opa(perf_section, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(perf_section, 0, 0);
-    lv_obj_set_style_pad_all(perf_section, 10, 0);
-    lv_obj_clear_flag(perf_section, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_t *ip_section = lv_obj_create(main_cont);
+    lv_obj_set_size(ip_section, 680, 70);
+    lv_obj_align(ip_section, LV_ALIGN_TOP_MID, 0, 46);
+    lv_obj_set_style_bg_opa(ip_section, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(ip_section, 0, 0);
+    lv_obj_set_style_pad_all(ip_section, 10, 0);
+    lv_obj_clear_flag(ip_section, LV_OBJ_FLAG_SCROLLABLE);
 
-    lv_obj_t *perf_title = lv_label_create(perf_section);
-    lv_label_set_text(perf_title, "Performance Mode:");
-    lv_obj_set_style_text_color(perf_title, COLOR_TEXT_PRIMARY, 0);
-    lv_obj_set_style_text_font(perf_title, &lv_font_montserrat_18, 0);
-    lv_obj_align(perf_title, LV_ALIGN_TOP_LEFT, 0, 0);
+    lv_obj_t *ip_title = lv_label_create(ip_section);
+    lv_label_set_text(ip_title, "Miner IP:");
+    lv_obj_set_style_text_color(ip_title, COLOR_TEXT_PRIMARY, 0);
+    lv_obj_set_style_text_font(ip_title, &lv_font_montserrat_18, 0);
+    lv_obj_align(ip_title, LV_ALIGN_TOP_LEFT, 0, 0);
 
-    lv_obj_t *perf_btn_cont = lv_obj_create(perf_section);
-    lv_obj_set_size(perf_btn_cont, 560, 56);
-    lv_obj_align(perf_btn_cont, LV_ALIGN_TOP_LEFT, 0, 32);
-    lv_obj_set_style_bg_opa(perf_btn_cont, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(perf_btn_cont, 0, 0);
-    lv_obj_set_style_pad_all(perf_btn_cont, 0, 0);
-    lv_obj_set_flex_flow(perf_btn_cont, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(perf_btn_cont, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-
-    performance_low_btn = create_settings_button(perf_btn_cont, "LOW", settings_performance_low_clicked,
-                                                 current_settings.performance_mode == PERFORMANCE_LOW);
-    performance_medium_btn = create_settings_button(perf_btn_cont, "MEDIUM", settings_performance_medium_clicked,
-                                                    current_settings.performance_mode == PERFORMANCE_MEDIUM);
-    performance_high_btn = create_settings_button(perf_btn_cont, "HIGH", settings_performance_high_clicked,
-                                                  current_settings.performance_mode == PERFORMANCE_HIGH);
+    miner_ip_value_label = lv_label_create(ip_section);
+    lv_label_set_text(miner_ip_value_label, current_miner_ip);
+    lv_obj_set_style_text_color(miner_ip_value_label, COLOR_TEXT_PRIMARY, 0);
+    lv_obj_set_style_text_font(miner_ip_value_label, &lv_font_montserrat_22, 0);
+    lv_obj_align(miner_ip_value_label, LV_ALIGN_TOP_LEFT, 140, -2);
 
     lv_obj_t *fan_section = lv_obj_create(main_cont);
     lv_obj_set_size(fan_section, 680, 200);
-    lv_obj_align(fan_section, LV_ALIGN_TOP_MID, 0, 160);
+    lv_obj_align(fan_section, LV_ALIGN_TOP_MID, 0, 120);
     lv_obj_set_style_bg_opa(fan_section, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(fan_section, 0, 0);
     lv_obj_set_style_pad_all(fan_section, 10, 0);
@@ -620,75 +454,9 @@ void settings_screen_create(void)
 
     update_fan_controls();
 
-    lv_obj_t *brightness_section = lv_obj_create(main_cont);
-    lv_obj_set_size(brightness_section, 680, 70);
-    lv_obj_align(brightness_section, LV_ALIGN_TOP_MID, 0, 350);
-    lv_obj_set_style_bg_opa(brightness_section, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(brightness_section, 0, 0);
-    lv_obj_set_style_pad_all(brightness_section, 10, 0);
-    lv_obj_clear_flag(brightness_section, LV_OBJ_FLAG_SCROLLABLE);
-
-    lv_obj_t *brightness_title = lv_label_create(brightness_section);
-    lv_label_set_text(brightness_title, "Screen Brightness:");
-    lv_obj_set_style_text_color(brightness_title, COLOR_TEXT_PRIMARY, 0);
-    lv_obj_set_style_text_font(brightness_title, &lv_font_montserrat_18, 0);
-    lv_obj_align(brightness_title, LV_ALIGN_TOP_LEFT, 0, 0);
-
-    brightness_slider = lv_slider_create(brightness_section);
-    lv_obj_set_size(brightness_slider, 550, 20);
-    lv_obj_align(brightness_slider, LV_ALIGN_TOP_LEFT, 0, 30);
-    lv_slider_set_range(brightness_slider, 5, 100);
-    lv_slider_set_value(brightness_slider, current_settings.brightness_percent, LV_ANIM_OFF);
-    lv_obj_set_style_bg_color(brightness_slider, COLOR_CARD_BG, LV_PART_MAIN);
-    lv_obj_set_style_bg_color(brightness_slider, COLOR_ACCENT, LV_PART_INDICATOR);
-    lv_obj_set_style_bg_color(brightness_slider, COLOR_ACCENT, LV_PART_KNOB);
-    lv_obj_add_event_cb(brightness_slider, settings_brightness_slider_changed, LV_EVENT_VALUE_CHANGED, NULL);
-
-    brightness_value_label = lv_label_create(brightness_section);
-    char brightness_text[16];
-    snprintf(brightness_text, sizeof(brightness_text), "%d%%", current_settings.brightness_percent);
-    lv_label_set_text(brightness_value_label, brightness_text);
-    lv_obj_set_style_text_color(brightness_value_label, COLOR_TEXT_PRIMARY, 0);
-    lv_obj_set_style_text_font(brightness_value_label, &lv_font_montserrat_22, 0);
-    lv_obj_align(brightness_value_label, LV_ALIGN_TOP_LEFT, 600, 26);
-
-    lv_obj_t *timezone_section = lv_obj_create(main_cont);
-    lv_obj_set_size(timezone_section, 680, 50);
-    lv_obj_align(timezone_section, LV_ALIGN_TOP_MID, 0, 430);
-    lv_obj_set_style_bg_opa(timezone_section, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(timezone_section, 0, 0);
-    lv_obj_set_style_pad_all(timezone_section, 10, 0);
-    lv_obj_clear_flag(timezone_section, LV_OBJ_FLAG_SCROLLABLE);
-
-    lv_obj_t *timezone_title = lv_label_create(timezone_section);
-    lv_label_set_text(timezone_title, "Time Zone:");
-    lv_obj_set_style_text_color(timezone_title, COLOR_TEXT_PRIMARY, 0);
-    lv_obj_set_style_text_font(timezone_title, &lv_font_montserrat_18, 0);
-    lv_obj_align(timezone_title, LV_ALIGN_TOP_LEFT, 0, 0);
-
-    timezone_dropdown = lv_dropdown_create(timezone_section);
-    lv_obj_set_size(timezone_dropdown, 300, 34);
-    lv_obj_align(timezone_dropdown, LV_ALIGN_TOP_LEFT, 140, -4);
-    lv_dropdown_set_options(timezone_dropdown, timezone_options);
-    lv_dropdown_set_selected(timezone_dropdown, current_timezone_index);
-    lv_obj_set_style_bg_color(timezone_dropdown, COLOR_CARD_BG, 0);
-    lv_obj_set_style_bg_opa(timezone_dropdown, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_width(timezone_dropdown, 1, 0);
-    lv_obj_set_style_border_color(timezone_dropdown, COLOR_ACCENT, 0);
-    lv_obj_set_style_border_opa(timezone_dropdown, LV_OPA_50, 0);
-    lv_obj_set_style_radius(timezone_dropdown, 8, 0);
-    lv_obj_set_style_text_color(timezone_dropdown, COLOR_TEXT_PRIMARY, 0);
-    lv_obj_set_style_text_font(timezone_dropdown, &lv_font_montserrat_16, 0);
-    lv_obj_add_event_cb(timezone_dropdown, settings_timezone_changed, LV_EVENT_VALUE_CHANGED, NULL);
-
-    if (!timezone_applied)
-    {
-        apply_timezone_by_index(current_timezone_index);
-    }
-
     lv_obj_t *wifi_section = lv_obj_create(main_cont);
     lv_obj_set_size(wifi_section, 680, 180);
-    lv_obj_align(wifi_section, LV_ALIGN_TOP_MID, 0, 500);
+    lv_obj_align(wifi_section, LV_ALIGN_TOP_MID, 0, 330);
     lv_obj_set_style_bg_opa(wifi_section, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(wifi_section, 0, 0);
     lv_obj_set_style_pad_all(wifi_section, 10, 0);
@@ -787,16 +555,11 @@ void settings_screen_destroy(void)
     {
         lv_obj_del(settings_screen);
         settings_screen = NULL;
-        performance_low_btn = NULL;
-        performance_medium_btn = NULL;
-        performance_high_btn = NULL;
+        miner_ip_value_label = NULL;
         auto_fan_checkbox = NULL;
         fan_slider = NULL;
         fan_value_label = NULL;
         fan_save_btn = NULL;
-        brightness_slider = NULL;
-        brightness_value_label = NULL;
-        timezone_dropdown = NULL;
         wifi_dropdown = NULL;
         wifi_password_ta = NULL;
         wifi_status_label = NULL;
@@ -827,8 +590,7 @@ void settings_update_info(const settings_info_t *info)
     {
         current_settings = *info;
         applied_fan_speed_percent = info->fan_speed_percent;
-        applied_asic_voltage_mv = settings_voltage_for_mode(info->performance_mode);
-        update_performance_buttons();
+        applied_asic_voltage_mv = settings_voltage_for_mode();
         update_fan_controls();
 
         if (auto_fan_checkbox)
@@ -843,53 +605,7 @@ void settings_update_info(const settings_info_t *info)
             }
         }
 
-        if (brightness_slider)
-        {
-            lv_slider_set_value(brightness_slider, current_settings.brightness_percent, LV_ANIM_OFF);
-        }
-        if (brightness_value_label)
-        {
-            char brightness_text[16];
-            snprintf(brightness_text, sizeof(brightness_text), "%d%%", current_settings.brightness_percent);
-            lv_label_set_text(brightness_value_label, brightness_text);
-        }
     }
-}
-
-void settings_performance_low_clicked(lv_event_t *e)
-{
-    current_settings.performance_mode = PERFORMANCE_LOW;
-    applied_asic_voltage_mv = settings_voltage_for_mode(current_settings.performance_mode);
-    update_performance_buttons();
-    home_update_voltage(NULL);
-    printf("Performance mode set to LOW\n");
-
-    BAP_send_frequency_setting(575.0f);
-    BAP_send_asic_voltage(applied_asic_voltage_mv);
-}
-
-void settings_performance_medium_clicked(lv_event_t *e)
-{
-    current_settings.performance_mode = PERFORMANCE_MEDIUM;
-    applied_asic_voltage_mv = settings_voltage_for_mode(current_settings.performance_mode);
-    update_performance_buttons();
-    home_update_voltage(NULL);
-    printf("Performance mode set to MEDIUM\n");
-
-    BAP_send_frequency_setting(600.0f);
-    BAP_send_asic_voltage(applied_asic_voltage_mv);
-}
-
-void settings_performance_high_clicked(lv_event_t *e)
-{
-    current_settings.performance_mode = PERFORMANCE_HIGH;
-    applied_asic_voltage_mv = settings_voltage_for_mode(current_settings.performance_mode);
-    update_performance_buttons();
-    home_update_voltage(NULL);
-    printf("Performance mode set to HIGH\n");
-
-    BAP_send_frequency_setting(655.0f);
-    BAP_send_asic_voltage(applied_asic_voltage_mv);
 }
 
 void settings_auto_fan_toggled(lv_event_t *e)
@@ -948,32 +664,6 @@ void settings_block_clicked(lv_event_t *e)
     block_screen_create();
     lv_scr_load(block_get_screen());
     settings_screen_destroy();
-}
-
-void settings_brightness_slider_changed(lv_event_t *e)
-{
-    lv_obj_t *slider = lv_event_get_target(e);
-    current_settings.brightness_percent = lv_slider_get_value(slider);
-
-    if (brightness_value_label)
-    {
-        char brightness_text[16];
-        snprintf(brightness_text, sizeof(brightness_text), "%d%%", current_settings.brightness_percent);
-        lv_label_set_text(brightness_value_label, brightness_text);
-    }
-
-    // Apply brightness change immediately
-    lcd_backlight_set_brightness(current_settings.brightness_percent);
-
-    printf("Screen brightness set to: %d%%\n", current_settings.brightness_percent);
-}
-
-void settings_timezone_changed(lv_event_t *e)
-{
-    lv_obj_t *dropdown = lv_event_get_target(e);
-    current_timezone_index = (int)lv_dropdown_get_selected(dropdown);
-    apply_timezone_by_index(current_timezone_index);
-    settings_save_timezone(current_timezone_index);
 }
 
 void settings_wifi_scan_clicked(lv_event_t *e)

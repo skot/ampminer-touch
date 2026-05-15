@@ -96,6 +96,8 @@ esp_err_t bap_handle_response(const bap_message_t *msg) {
         ret = bap_handle_block_height_response(msg->value);
     } else if (strcmp(msg->parameter, "mode") == 0) {
         ret = bap_handle_mode(msg->value);
+    } else if (strcmp(msg->parameter, "minerIp") == 0) {
+        ret = bap_handle_miner_ip_response(msg->value);
     } else if (strcmp(msg->parameter, "wifiNetwork") == 0) {
         ret = bap_handle_wifi_network_response(msg->value);
     } else if (strcmp(msg->parameter, "wifiStatus") == 0) {
@@ -369,6 +371,23 @@ esp_err_t bap_handle_mode(const char *value) {
         return ESP_OK;
     } else {
         ESP_LOGW(TAG, "Failed to acquire LVGL mutex for mode update");
+        return ESP_ERR_TIMEOUT;
+    }
+}
+
+esp_err_t bap_handle_miner_ip_response(const char *value) {
+    if (!value) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    ESP_LOGI(TAG, "Received miner IP: %s", value);
+
+    if (lvgl_port_lock(100)) {
+        settings_update_miner_ip(value);
+        lvgl_port_unlock();
+        return ESP_OK;
+    } else {
+        ESP_LOGW(TAG, "Failed to acquire LVGL mutex for miner IP update");
         return ESP_ERR_TIMEOUT;
     }
 }

@@ -26,15 +26,11 @@ void settings_wifi_clear_networks(void);
 void settings_wifi_add_network(const char *ssid);
 void settings_wifi_update_status(const char *status);
 void settings_wifi_finish_scan(const char *status);
+void settings_update_miner_ip(const char *ip);
 
-void settings_performance_low_clicked(lv_event_t * e);
-void settings_performance_medium_clicked(lv_event_t * e);
-void settings_performance_high_clicked(lv_event_t * e);
 void settings_auto_fan_toggled(lv_event_t * e);
 void settings_fan_slider_changed(lv_event_t * e);
 void settings_fan_save_clicked(lv_event_t * e);
-void settings_brightness_slider_changed(lv_event_t * e);
-void settings_timezone_changed(lv_event_t * e);
 void settings_wifi_scan_clicked(lv_event_t * e);
 void settings_wifi_connect_clicked(lv_event_t * e);
 void settings_home_clicked(lv_event_t * e);

@@ -3,6 +3,7 @@
 #include "night.h"
 #include "block.h"
 #include "stdio.h"
+#include "stdlib.h"
 #include "string.h"
 #include "custom_fonts.h"
 #include "esp_timer.h"
@@ -17,20 +18,16 @@ static lv_obj_t *hardware_popup = NULL;
 static lv_obj_t *pool_popup = NULL;
 static lv_obj_t *power_label = NULL;
 static lv_obj_t *temperature_label = NULL;
-static lv_obj_t *efficiency_label = NULL;
 static lv_obj_t *fan_label = NULL;
 static lv_obj_t *shares_label = NULL;
 static lv_obj_t *bd_label = NULL;
 
-static float current_power_watts = 0.0f;
-static float current_hashrate_ghs = 0.0f;
 static char current_hashrate_text[16] = "";
 static char current_voltage_text[16] = "";
 static char current_temperature_text[16] = "";
 static char current_fan_text[16] = "";
 static char current_shares_text[32] = "";
 static char current_bd_text[32] = "";
-static char current_efficiency_text[32] = "";
 
 static hardware_info_t current_hardware_info = {
     .model = "loading...",
@@ -45,36 +42,9 @@ static pool_info_t current_pool_info = {
 static void hardware_popup_close_clicked(lv_event_t *e);
 static void pool_popup_close_clicked(lv_event_t *e);
 static void apply_cached_home_values(void);
+static void format_hashrate_text(char *output, size_t output_size, const char *hashrate_ghs);
 static void format_voltage_text(char *output, size_t output_size, const char *voltage_mv);
 static void format_fan_setpoint_text(char *output, size_t output_size, const char *fan_percent);
-
-static lv_obj_t *create_nav_button(lv_obj_t *parent, const char *text, lv_event_cb_t event_cb)
-{
-    lv_obj_t *btn = lv_btn_create(parent);
-    lv_obj_set_size(btn, 220, 60);
-    lv_obj_set_style_bg_color(btn, COLOR_ACCENT, 0);
-    lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_width(btn, 0, 0);
-    lv_obj_set_style_border_opa(btn, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_radius(btn, 8, 0);
-    lv_obj_set_style_shadow_width(btn, 0, 0);
-
-    lv_obj_set_style_bg_color(btn, COLOR_ACCENT, LV_STATE_PRESSED);
-    lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, LV_STATE_PRESSED);
-
-    lv_obj_t *label = lv_label_create(btn);
-    lv_label_set_text(label, text);
-    lv_obj_set_style_text_color(label, COLOR_TEXT_ON_ACCENT, 0);
-    lv_obj_set_style_text_font(label, &lv_font_montserrat_18, 0);
-    lv_obj_center(label);
-
-    if (event_cb)
-    {
-        lv_obj_add_event_cb(btn, event_cb, LV_EVENT_CLICKED, NULL);
-    }
-
-    return btn;
-}
 
 static void create_hardware_popup(void)
 {
@@ -337,16 +307,30 @@ static void apply_cached_home_values(void)
     {
         lv_label_set_text(bd_label, strlen(current_bd_text) ? current_bd_text : "loading...");
     }
-    if (efficiency_label)
+}
+
+static void format_hashrate_text(char *output, size_t output_size, const char *hashrate_ghs)
+{
+    if (!hashrate_ghs || hashrate_ghs[0] == '\0' || hashrate_ghs[0] == '-')
     {
-        lv_label_set_text(efficiency_label, strlen(current_efficiency_text) ? current_efficiency_text : "-- J/TH");
+        snprintf(output, output_size, "--");
+        return;
     }
+
+    float hashrate_ths = atof(hashrate_ghs) / 1000.0f;
+    if (hashrate_ths <= 0.0f)
+    {
+        snprintf(output, output_size, "--");
+        return;
+    }
+
+    snprintf(output, output_size, "%.2f", hashrate_ths);
 }
 
 static void format_voltage_text(char *output, size_t output_size, const char *voltage_mv)
 {
-    float voltage_value_mv = voltage_mv ? atof(voltage_mv) : settings_get_asic_voltage_mv();
-    snprintf(output, output_size, "%.2fV", voltage_value_mv / 1000.0f);
+    float voltage_value_centivolts = voltage_mv ? atof(voltage_mv) : settings_get_asic_voltage_mv();
+    snprintf(output, output_size, "%.2fV", voltage_value_centivolts / 100.0f);
 }
 
 static void format_fan_setpoint_text(char *output, size_t output_size, const char *fan_percent)
@@ -446,15 +430,15 @@ void home_screen_create(void)
     // lv_obj_align(title_label, LV_ALIGN_TOP_MID, 0, 10);
 
     lv_obj_t *main_display_cont = lv_obj_create(main_cont);
-    lv_obj_set_size(main_display_cont, 680, 110);
-    lv_obj_align(main_display_cont, LV_ALIGN_TOP_MID, 0, 0);
+    lv_obj_set_size(main_display_cont, 680, 135);
+    lv_obj_align(main_display_cont, LV_ALIGN_TOP_MID, 0, 8);
     lv_obj_set_style_bg_opa(main_display_cont, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(main_display_cont, 0, 0);
     lv_obj_set_style_pad_all(main_display_cont, 0, 0);
     lv_obj_clear_flag(main_display_cont, LV_OBJ_FLAG_SCROLLABLE);
 
     lv_obj_t *power_cont = lv_obj_create(main_display_cont);
-    lv_obj_set_size(power_cont, 220, 110);
+    lv_obj_set_size(power_cont, 220, 135);
     lv_obj_align(power_cont, LV_ALIGN_LEFT_MID, 0, 0);
     lv_obj_set_style_bg_opa(power_cont, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(power_cont, 0, 0);
@@ -464,16 +448,16 @@ void home_screen_create(void)
     lv_label_set_text(power_icon, LV_SYMBOL_CHARGE);
     lv_obj_set_style_text_color(power_icon, COLOR_ACCENT, 0);
     lv_obj_set_style_text_font(power_icon, &lv_font_montserrat_24, 0);
-    lv_obj_align(power_icon, LV_ALIGN_CENTER, 0, -24);
+    lv_obj_align(power_icon, LV_ALIGN_CENTER, 0, -34);
 
     power_label = lv_label_create(power_cont);
     lv_label_set_text(power_label, "loading...");
     lv_obj_set_style_text_color(power_label, COLOR_TEXT_PRIMARY, 0);
-    lv_obj_set_style_text_font(power_label, &lv_font_montserrat_18, 0);
-    lv_obj_align(power_label, LV_ALIGN_CENTER, 0, 20);
+    lv_obj_set_style_text_font(power_label, &lv_font_montserrat_24, 0);
+    lv_obj_align(power_label, LV_ALIGN_CENTER, 0, 24);
 
     lv_obj_t *hashrate_cont = lv_obj_create(main_display_cont);
-    lv_obj_set_size(hashrate_cont, 220, 110);
+    lv_obj_set_size(hashrate_cont, 240, 135);
     lv_obj_align(hashrate_cont, LV_ALIGN_CENTER, 0, 0);
     lv_obj_set_style_bg_opa(hashrate_cont, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(hashrate_cont, 0, 0);
@@ -483,22 +467,16 @@ void home_screen_create(void)
     lv_label_set_text(hashrate_label, "loading...");
     lv_obj_set_style_text_color(hashrate_label, COLOR_TEXT_PRIMARY, 0);
     lv_obj_set_style_text_font(hashrate_label, &lv_font_montserrat_48, 0);
-    lv_obj_align(hashrate_label, LV_ALIGN_CENTER, 0, -10);
+    lv_obj_align(hashrate_label, LV_ALIGN_CENTER, 0, -14);
 
     lv_obj_t *unit_label = lv_label_create(hashrate_cont);
-    lv_label_set_text(unit_label, "GH/s");
+    lv_label_set_text(unit_label, "TH/s");
     lv_obj_set_style_text_color(unit_label, COLOR_TEXT_PRIMARY, 0);
-    lv_obj_set_style_text_font(unit_label, &lv_font_montserrat_20, 0);
-    lv_obj_align(unit_label, LV_ALIGN_CENTER, -55, 34);
-
-    efficiency_label = lv_label_create(hashrate_cont);
-    lv_label_set_text(efficiency_label, "-- J/TH");
-    lv_obj_set_style_text_color(efficiency_label, COLOR_TEXT_PRIMARY, 0);
-    lv_obj_set_style_text_font(efficiency_label, &lv_font_montserrat_20, 0);
-    lv_obj_align(efficiency_label, LV_ALIGN_CENTER, 55, 34);
+    lv_obj_set_style_text_font(unit_label, &lv_font_montserrat_24, 0);
+    lv_obj_align(unit_label, LV_ALIGN_CENTER, 0, 42);
 
     lv_obj_t *temp_cont = lv_obj_create(main_display_cont);
-    lv_obj_set_size(temp_cont, 220, 110);
+    lv_obj_set_size(temp_cont, 220, 135);
     lv_obj_align(temp_cont, LV_ALIGN_RIGHT_MID, 0, 0);
     lv_obj_set_style_bg_opa(temp_cont, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(temp_cont, 0, 0);
@@ -508,24 +486,24 @@ void home_screen_create(void)
     lv_img_set_src(temp_icon, &temperature_icon);
     lv_obj_set_style_img_recolor(temp_icon, COLOR_ACCENT, 0);
     lv_obj_set_style_img_recolor_opa(temp_icon, LV_OPA_COVER, 0);
-    lv_obj_align(temp_icon, LV_ALIGN_CENTER, 0, -24);
+    lv_obj_align(temp_icon, LV_ALIGN_CENTER, 0, -34);
 
     temperature_label = lv_label_create(temp_cont);
     lv_label_set_text(temperature_label, "loading...");
     lv_obj_set_style_text_color(temperature_label, COLOR_TEXT_PRIMARY, 0);
-    lv_obj_set_style_text_font(temperature_label, &lv_font_montserrat_18, 0);
-    lv_obj_align(temperature_label, LV_ALIGN_CENTER, 0, 26);
+    lv_obj_set_style_text_font(temperature_label, &lv_font_montserrat_24, 0);
+    lv_obj_align(temperature_label, LV_ALIGN_CENTER, 0, 30);
 
     lv_obj_t *second_row_cont = lv_obj_create(main_cont);
-    lv_obj_set_size(second_row_cont, 680, 100);
-    lv_obj_align(second_row_cont, LV_ALIGN_TOP_MID, 0, 150);
+    lv_obj_set_size(second_row_cont, 680, 145);
+    lv_obj_align(second_row_cont, LV_ALIGN_TOP_MID, 0, 178);
     lv_obj_set_style_bg_opa(second_row_cont, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(second_row_cont, 0, 0);
     lv_obj_set_style_pad_all(second_row_cont, 0, 0);
     lv_obj_clear_flag(second_row_cont, LV_OBJ_FLAG_SCROLLABLE);
 
     lv_obj_t *bd_cont = lv_obj_create(second_row_cont);
-    lv_obj_set_size(bd_cont, 220, 110);
+    lv_obj_set_size(bd_cont, 220, 145);
     lv_obj_align(bd_cont, LV_ALIGN_LEFT_MID, 0, 0);
     lv_obj_set_style_bg_opa(bd_cont, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(bd_cont, 0, 0);
@@ -535,34 +513,34 @@ void home_screen_create(void)
     lv_img_set_src(bd_icon, &star);
     lv_obj_set_style_img_recolor(bd_icon, COLOR_ACCENT, 0);
     lv_obj_set_style_img_recolor_opa(bd_icon, LV_OPA_COVER, 0);
-    lv_obj_align(bd_icon, LV_ALIGN_CENTER, 0, -24);
+    lv_obj_align(bd_icon, LV_ALIGN_CENTER, 0, -38);
 
     bd_label = lv_label_create(bd_cont);
     lv_label_set_text(bd_label, "loading...");
     lv_obj_set_style_text_color(bd_label, COLOR_TEXT_PRIMARY, 0);
-    lv_obj_set_style_text_font(bd_label, &lv_font_montserrat_20, 0);
-    lv_obj_align(bd_label, LV_ALIGN_CENTER, 0, 20);
+    lv_obj_set_style_text_font(bd_label, &lv_font_montserrat_24, 0);
+    lv_obj_align(bd_label, LV_ALIGN_CENTER, 0, 28);
 
     lv_obj_t *share_icon = lv_label_create(second_row_cont);
     lv_label_set_text(share_icon, LV_SYMBOL_OK);
     lv_obj_set_style_text_color(share_icon, COLOR_ACCENT, 0);
-    lv_obj_set_style_text_font(share_icon, &lv_font_montserrat_32, 0);
-    lv_obj_align(share_icon, LV_ALIGN_CENTER, -45, -32);
+    lv_obj_set_style_text_font(share_icon, &lv_font_montserrat_36, 0);
+    lv_obj_align(share_icon, LV_ALIGN_CENTER, -52, -44);
 
     lv_obj_t *share_reject_icon = lv_label_create(second_row_cont);
     lv_label_set_text(share_reject_icon, LV_SYMBOL_MINUS);
     lv_obj_set_style_text_color(share_reject_icon, COLOR_ACCENT, 0);
-    lv_obj_set_style_text_font(share_reject_icon, &lv_font_montserrat_32, 0);
-    lv_obj_align(share_reject_icon, LV_ALIGN_CENTER, 45, -32);
+    lv_obj_set_style_text_font(share_reject_icon, &lv_font_montserrat_36, 0);
+    lv_obj_align(share_reject_icon, LV_ALIGN_CENTER, 52, -44);
 
     shares_label = lv_label_create(second_row_cont);
     lv_label_set_text(shares_label, "loading...");
     lv_obj_set_style_text_color(shares_label, COLOR_TEXT_PRIMARY, 0);
-    lv_obj_set_style_text_font(shares_label, &lv_font_montserrat_32, 0);
-    lv_obj_align(shares_label, LV_ALIGN_CENTER, 0, 15);
+    lv_obj_set_style_text_font(shares_label, &lv_font_montserrat_48, 0);
+    lv_obj_align(shares_label, LV_ALIGN_CENTER, 0, 24);
 
     lv_obj_t *fan_cont = lv_obj_create(second_row_cont);
-    lv_obj_set_size(fan_cont, 220, 110);
+    lv_obj_set_size(fan_cont, 220, 145);
     lv_obj_align(fan_cont, LV_ALIGN_RIGHT_MID, 0, 0);
     lv_obj_set_style_bg_opa(fan_cont, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(fan_cont, 0, 0);
@@ -572,27 +550,13 @@ void home_screen_create(void)
     lv_img_set_src(fan_icon, &fan);
     lv_obj_set_style_img_recolor(fan_icon, COLOR_ACCENT, 0);
     lv_obj_set_style_img_recolor_opa(fan_icon, LV_OPA_COVER, 0);
-    lv_obj_align(fan_icon, LV_ALIGN_CENTER, 0, -24);
+    lv_obj_align(fan_icon, LV_ALIGN_CENTER, 0, -38);
 
     fan_label = lv_label_create(fan_cont);
     lv_label_set_text(fan_label, "loading...");
     lv_obj_set_style_text_color(fan_label, COLOR_TEXT_PRIMARY, 0);
-    lv_obj_set_style_text_font(fan_label, &lv_font_montserrat_18, 0);
-    lv_obj_align(fan_label, LV_ALIGN_CENTER, 0, 24);
-
-    lv_obj_t *nav_cont = lv_obj_create(main_cont);
-    lv_obj_set_size(nav_cont, 680, 70);
-    lv_obj_align(nav_cont, LV_ALIGN_BOTTOM_MID, 0, -8);
-    lv_obj_set_style_bg_opa(nav_cont, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(nav_cont, 0, 0);
-    lv_obj_set_style_pad_all(nav_cont, 0, 0);
-    lv_obj_clear_flag(nav_cont, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_scrollbar_mode(nav_cont, LV_SCROLLBAR_MODE_OFF);
-    lv_obj_set_flex_flow(nav_cont, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(nav_cont, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-
-    create_nav_button(nav_cont, "Hardware", home_hardware_clicked);
-    create_nav_button(nav_cont, "Pool", home_pool_clicked);
+    lv_obj_set_style_text_font(fan_label, &lv_font_montserrat_24, 0);
+    lv_obj_align(fan_label, LV_ALIGN_CENTER, 0, 32);
 
     lv_obj_t *bottom_nav = lv_obj_create(home_screen);
     lv_obj_set_size(bottom_nav, SCREEN_WIDTH, 64);
@@ -626,7 +590,6 @@ void home_screen_destroy(void)
         pool_popup = NULL;
         power_label = NULL;
         temperature_label = NULL;
-        efficiency_label = NULL;
         shares_label = NULL;
         fan_label = NULL;
         bd_label = NULL;
@@ -640,16 +603,12 @@ void home_update_hashrate(const char *hashrate)
         return;
     }
 
-    strncpy(current_hashrate_text, hashrate, sizeof(current_hashrate_text) - 1);
+    format_hashrate_text(current_hashrate_text, sizeof(current_hashrate_text), hashrate);
     current_hashrate_text[sizeof(current_hashrate_text) - 1] = '\0';
     if (hashrate_label)
     {
-        lv_label_set_text(hashrate_label, hashrate);
+        lv_label_set_text(hashrate_label, current_hashrate_text);
     }
-
-    current_hashrate_ghs = atof(hashrate);
-
-    update_efficiency_display();
 }
 
 lv_obj_t *home_get_screen(void)
@@ -704,13 +663,7 @@ void home_update_hardware_info(const hardware_info_t *hw_info)
 
 void home_update_power(const char *power)
 {
-    if (!power)
-    {
-        return;
-    }
-
-    current_power_watts = atof(power);
-    update_efficiency_display();
+    (void)power;
 }
 
 void home_update_voltage(const char *voltage_mv)
@@ -726,30 +679,6 @@ void home_update_voltage(const char *voltage_mv)
     }
 }
 
-void update_efficiency_display(void)
-{
-    if (current_hashrate_ghs > 0.0f && current_power_watts > 0.0f)
-    {
-        float efficiency_j_th = current_power_watts / (current_hashrate_ghs / 1000.0f);
-        char buffer[32];
-        snprintf(buffer, sizeof(buffer), "%.1f J/TH", efficiency_j_th);
-        strncpy(current_efficiency_text, buffer, sizeof(current_efficiency_text) - 1);
-        current_efficiency_text[sizeof(current_efficiency_text) - 1] = '\0';
-        if (efficiency_label)
-        {
-            lv_label_set_text(efficiency_label, buffer);
-        }
-    }
-    else
-    {
-        strncpy(current_efficiency_text, "-- J/TH", sizeof(current_efficiency_text) - 1);
-        current_efficiency_text[sizeof(current_efficiency_text) - 1] = '\0';
-        if (efficiency_label)
-        {
-            lv_label_set_text(efficiency_label, "-- J/TH");
-        }
-    }
-}
 void home_update_temperature(const char *temperature)
 {
     if (!temperature)

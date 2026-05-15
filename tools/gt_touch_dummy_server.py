@@ -37,6 +37,7 @@ SYSTEM_INFO_ORDER = (
     "pool",
     "poolPort",
     "poolUser",
+    "minerIp",
     "mode",
     "voltage",
 )
@@ -61,6 +62,7 @@ class DummyMinerState:
     pool_url: str = "stratum+tcp://public-pool.io"
     pool_port: str = "3333"
     pool_user: str = "gt-touch-demo"
+    miner_ip: str = "192.168.1.51"
     shares: int = 42
     best_difficulty: int = 1024
     block_height: int = 891234
@@ -169,6 +171,9 @@ class DummyMinerState:
 
         if response_parameter == "poolUser":
             return self.pool_user
+
+        if response_parameter == "minerIp":
+            return self.miner_ip
 
         if response_parameter == "mode":
             return self.mode
